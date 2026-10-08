@@ -1,4 +1,4 @@
-import { formatTime, formatDelta } from '../utils/MathUtils.js';
+import { formatTime } from '../utils/MathUtils.js';
 
 /**
  * Glassmorphic Racing HUD Interface Controller.
@@ -23,33 +23,86 @@ export class HUD {
     this.minimapCtx = this.minimapCanvas ? this.minimapCanvas.getContext('2d') : null;
 
     this.useMph = false;
+    this.mapCanvas = document.createElement('canvas');
+    this.worldToMap = null;
+    this.cache = {};
   }
 
-  update(physics, trackSpline) {
+  /** Write text only when it changed, to keep the DOM quiet at 60fps. */
+  setText(el, key, value) {
+    if (!el || this.cache[key] === value) return;
+    this.cache[key] = value;
+    el.textContent = value;
+  }
+
+  /** Pre-render the circuit outline once per track. */
+  setTrack(path) {
+    if (!this.minimapCanvas) return;
+    const width = this.minimapCanvas.width;
+    const height = this.minimapCanvas.height;
+    this.mapCanvas.width = width;
+    this.mapCanvas.height = height;
+
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < path.n; i++) {
+      minX = Math.min(minX, path.px[i]);
+      maxX = Math.max(maxX, path.px[i]);
+      minZ = Math.min(minZ, path.pz[i]);
+      maxZ = Math.max(maxZ, path.pz[i]);
+    }
+    const margin = 16;
+    const scale = Math.min((width - margin * 2) / (maxX - minX || 1), (height - margin * 2) / (maxZ - minZ || 1));
+    const offX = (width - (maxX - minX) * scale) / 2;
+    const offY = (height - (maxZ - minZ) * scale) / 2;
+    // Top-down with +Z (the start straight) pointing up; +X is the driver's left, so it maps to screen-left
+    this.worldToMap = (x, z) => ({ x: offX + (maxX - x) * scale, y: offY + (maxZ - z) * scale });
+
+    const ctx = this.mapCanvas.getContext('2d');
+    ctx.clearRect(0, 0, width, height);
+    ctx.beginPath();
+    for (let i = 0; i < path.n; i += 4) {
+      const m = this.worldToMap(path.px[i], path.pz[i]);
+      if (i === 0) ctx.moveTo(m.x, m.y);
+      else ctx.lineTo(m.x, m.y);
+    }
+    ctx.closePath();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+    ctx.stroke();
+
+    const startM = this.worldToMap(path.px[0], path.pz[0]);
+    ctx.beginPath();
+    ctx.fillStyle = '#ef4444';
+    ctx.arc(startM.x, startM.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+
+  update(physics) {
     // 1. Speed & Gear
     const speed = this.useMph ? physics.speedKmh * 0.621371 : physics.speedKmh;
-    if (this.speedEl) this.speedEl.textContent = Math.round(speed).toString();
-    if (this.speedUnitEl) this.speedUnitEl.textContent = this.useMph ? 'MPH' : 'KM/H';
-
-    let gearText = physics.currentGear.toString();
-    if (physics.currentGear === 0) gearText = 'R';
-    if (this.gearEl) this.gearEl.textContent = gearText;
+    this.setText(this.speedEl, 'speed', Math.round(speed).toString());
+    this.setText(this.speedUnitEl, 'unit', this.useMph ? 'MPH' : 'KM/H');
+    this.setText(this.gearEl, 'gear', physics.currentGear === 0 ? 'R' : physics.currentGear.toString());
 
     // 2. Tachometer & Shift Lights
     const rpm = physics.rpm;
-    if (this.rpmEl) this.rpmEl.textContent = Math.round(rpm).toString();
+    this.setText(this.rpmEl, 'rpm', (Math.round(rpm / 50) * 50).toString());
 
     const maxRpm = physics.maxRpm;
     const rpmRatio = Math.min(1.0, Math.max(0, (rpm - 1000) / (maxRpm - 1000)));
 
     if (this.tachBar) {
-      this.tachBar.style.width = `${rpmRatio * 100}%`;
-      if (rpmRatio > 0.85) {
-        this.tachBar.style.backgroundColor = '#ef4444'; // Redline
-      } else if (rpmRatio > 0.65) {
-        this.tachBar.style.backgroundColor = '#eab308'; // Warning yellow
-      } else {
-        this.tachBar.style.backgroundColor = '#22c55e'; // Green
+      this.tachBar.style.width = `${(rpmRatio * 100).toFixed(1)}%`;
+      const color = rpmRatio > 0.85 ? '#ef4444' : rpmRatio > 0.65 ? '#eab308' : '#22c55e';
+      if (this.cache.tachColor !== color) {
+        this.cache.tachColor = color;
+        this.tachBar.style.backgroundColor = color;
       }
     }
 
@@ -57,108 +110,42 @@ export class HUD {
     if (this.shiftLights && this.shiftLights.length > 0) {
       const activeThresholds = [0.4, 0.55, 0.7, 0.82, 0.92];
       this.shiftLights.forEach((light, i) => {
-        if (rpmRatio >= activeThresholds[i]) {
-          light.classList.add('active');
-          if (i === 4 && rpmRatio >= 0.94) {
-            light.classList.add('flash');
-          } else {
-            light.classList.remove('flash');
-          }
-        } else {
-          light.classList.remove('active', 'flash');
-        }
+        const active = rpmRatio >= activeThresholds[i];
+        light.classList.toggle('active', active);
+        light.classList.toggle('flash', active && i === 4 && rpmRatio >= 0.94);
       });
     }
 
     // 3. Lap Timing & Sector
-    if (this.lapCurrentEl) this.lapCurrentEl.textContent = formatTime(physics.currentLapTime);
-    if (this.lapBestEl) this.lapBestEl.textContent = formatTime(physics.bestLapTime);
-    if (this.lapNumberEl) this.lapNumberEl.textContent = `LAP ${physics.currentLap}`;
-    if (this.sectorEl) this.sectorEl.textContent = `SECTOR ${physics.currentSector}`;
+    this.setText(this.lapCurrentEl, 'lap', formatTime(physics.lapStarted ? physics.currentLapTime : 0));
+    this.setText(this.lapBestEl, 'best', formatTime(physics.bestLapTime === null ? NaN : physics.bestLapTime));
+    this.setText(this.lapNumberEl, 'lapNum', `LAP ${physics.currentLap}`);
+    this.setText(this.sectorEl, 'sector', `SECTOR ${physics.currentSector}`);
 
     // 4. Minimap Rendering
-    if (this.minimapCtx && trackSpline) {
-      this.renderMinimap(physics, trackSpline);
-    }
+    if (this.minimapCtx && this.worldToMap) this.renderMinimap(physics);
   }
 
-  renderMinimap(physics, trackSpline) {
+  renderMinimap(physics) {
     const ctx = this.minimapCtx;
-    const width = this.minimapCanvas.width;
-    const height = this.minimapCanvas.height;
+    ctx.clearRect(0, 0, this.minimapCanvas.width, this.minimapCanvas.height);
+    ctx.drawImage(this.mapCanvas, 0, 0);
 
-    ctx.clearRect(0, 0, width, height);
-
-    // Get 100 points on spline to draw track outline
-    const numPts = 100;
-    const points = trackSpline.getSpacedPoints(numPts);
-
-    // Compute bounds to fit map nicely in canvas
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    points.forEach(p => {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.z < minZ) minZ = p.z;
-      if (p.z > maxZ) maxZ = p.z;
-    });
-
-    const margin = 20;
-    const mapW = maxX - minX || 1;
-    const mapH = maxZ - minZ || 1;
-    const scale = Math.min((width - margin * 2) / mapW, (height - margin * 2) / mapH);
-
-    const worldToMap = (x, z) => {
-      const mx = margin + (x - minX) * scale;
-      const my = margin + (z - minZ) * scale;
-      return { x: mx, y: my };
-    };
-
-    // Draw Track Path
-    ctx.beginPath();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.lineWidth = 6;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    points.forEach((p, idx) => {
-      const m = worldToMap(p.x, p.z);
-      if (idx === 0) ctx.moveTo(m.x, m.y);
-      else ctx.lineTo(m.x, m.y);
-    });
-    ctx.closePath();
-    ctx.stroke();
-
-    // Draw Inner Track Highlight
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
-    ctx.stroke();
-
-    // Draw Start / Finish Line
-    const startM = worldToMap(points[0].x, points[0].z);
-    ctx.beginPath();
-    ctx.fillStyle = '#ef4444';
-    ctx.arc(startM.x, startM.y, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Draw Player Car Icon & Direction Cone
-    const carM = worldToMap(physics.position.x, physics.position.z);
-
+    const carM = this.worldToMap(physics.renderPosition.x, physics.renderPosition.z);
     ctx.save();
     ctx.translate(carM.x, carM.y);
-    ctx.rotate(-physics.heading);
+    // Heading 0 faces +Z (up on the map); positive heading turns left (counter-clockwise on screen)
+    ctx.rotate(-physics.renderHeading);
 
-    // Car Direction Triangle
     ctx.fillStyle = '#38bdf8';
     ctx.shadowColor = '#0284c7';
     ctx.shadowBlur = 8;
-
     ctx.beginPath();
     ctx.moveTo(0, -7);
     ctx.lineTo(-4, 5);
     ctx.lineTo(4, 5);
     ctx.closePath();
     ctx.fill();
-
     ctx.restore();
   }
 }

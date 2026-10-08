@@ -729,3 +729,54 @@ kbd {
 
 .touch-btn.accel { border-color: var(--color-green); color: var(--color-green); }
 .touch-btn.brake { border-color: var(--color-red); color: var(--color-red); }
+
+/* Transmission badge beside the rev counter */
+.trans-badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+#canvas-container canvas {
+  display: block;
+  touch-action: none;
+}
+
+.touch-btn {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Garage: dock the panel to the side and keep the scene clear so the car stays visible */
+#garage-panel {
+  background: transparent;
+  backdrop-filter: none;
+  justify-content: flex-end;
+  align-items: flex-start;
+  padding: 92px 20px 0 0;
+  pointer-events: none;
+}
+
+#garage-panel .modal-card {
+  width: 400px;
+  max-height: calc(100vh - 112px);
+  pointer-events: auto;
+}
+
+@media (max-width: 900px) {
+  #garage-panel {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+  }
+
+  #garage-panel .modal-card {
+    width: 100%;
+    max-width: 100%;
+    max-height: 46vh;
+  }
+}

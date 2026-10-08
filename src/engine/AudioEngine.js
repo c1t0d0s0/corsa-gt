@@ -217,6 +217,13 @@ export class AudioEngine {
     popOsc.stop(now + 0.09);
   }
 
+  /** Silence everything while the game is paused. */
+  setPaused(paused) {
+    if (!this.ctx) return;
+    if (paused) this.ctx.suspend();
+    else this.ctx.resume();
+  }
+
   setMuted(muted) {
     this.muted = muted;
     if (this.masterGain && this.ctx) {

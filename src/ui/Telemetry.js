@@ -33,8 +33,8 @@ export class TelemetryUI {
     if (!this.visible) return;
 
     // 1. Pedal Bars
-    if (this.throttleBar) this.throttleBar.style.height = `${input.throttle * 100}%`;
-    if (this.brakeBar) this.brakeBar.style.height = `${input.brake * 100}%`;
+    if (this.throttleBar) this.throttleBar.style.height = `${physics.throttle * 100}%`;
+    if (this.brakeBar) this.brakeBar.style.height = `${physics.brake * 100}%`;
     if (this.steerBar) {
       const steerPct = (physics.steerAngle + 1) / 2 * 100; // 0% (full left) to 100% (full right)
       this.steerBar.style.left = `${steerPct}%`;
@@ -45,15 +45,20 @@ export class TelemetryUI {
       this.renderGForceMatrix(physics.gForceLateral, physics.gForceLongitudinal);
     }
 
-    // 3. Tire Slip Heat Colors
-    const slip = physics.slipAmount;
-    let color = '#22c55e'; // Green
-    if (slip > 0.8) color = '#ef4444'; // Red (Heavy drift)
-    else if (slip > 0.3) color = '#f97316'; // Orange (Minor slip)
-
-    Object.values(this.tires).forEach(tireEl => {
-      if (tireEl) tireEl.style.backgroundColor = color;
-    });
+    // 3. Tire Slip Heat Colors, per axle
+    const slipColor = (angle, extra) => {
+      const slip = Math.max(Math.abs(angle) / 0.14, extra);
+      if (slip > 1.4) return '#ef4444'; // Red (sliding)
+      if (slip > 0.8) return '#f97316'; // Orange (at the limit)
+      return '#22c55e';
+    };
+    const front = slipColor(physics.slipFront, 0);
+    const rear = slipColor(physics.slipRear, physics.wheelSpin * 4);
+    const paint = (el, color) => { if (el && el.style.backgroundColor !== color) el.style.backgroundColor = color; };
+    paint(this.tires.fl, front);
+    paint(this.tires.fr, front);
+    paint(this.tires.rl, rear);
+    paint(this.tires.rr, rear);
   }
 
   renderGForceMatrix(latG, longG) {

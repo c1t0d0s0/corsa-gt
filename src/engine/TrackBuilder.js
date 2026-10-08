@@ -1,323 +1,278 @@
 import * as THREE from 'three';
+import { getTrackDef } from './track/TrackData.js';
+import { TrackPath } from './track/TrackPath.js';
+import { buildScenery } from './Scenery.js';
+import {
+  asphaltTextures, grassTextures, sandTextures, concreteTextures,
+  kerbTexture, checkerTexture, bannerTexture
+} from './ProceduralTextures.js';
 
 /**
- * 3D Procedural Track & Circuit Environment Builder.
- * Constructs track mesh, kerbs, barriers, checkpoints, and environment props.
+ * Sweep a 2D cross-section along the whole circuit as one mesh.
+ *
+ * profile: [{ o, y, u?, c?, cut? }] — lateral offset (left +), height above the
+ * road, optional texture u, optional grey level, and `cut` to not join this
+ * point to the next (for hard edges). Offsets should increase for an
+ * upward-facing surface.
+ */
+export function sweep(path, profile, { step = 2, uvScale = 4, mask = null, colors = false } = {}) {
+  const n = path.n;
+  const rows = Math.ceil(n / step);
+  const cols = profile.length;
+  const vRepeat = Math.max(1, Math.round(path.length / uvScale));
+  const pos = new Float32Array((rows + 1) * cols * 3);
+  const uv = new Float32Array((rows + 1) * cols * 2);
+  const col = colors ? new Float32Array((rows + 1) * cols * 3) : null;
+  const index = [];
+
+  for (let r = 0; r <= rows; r++) {
+    const i = r === rows ? 0 : r * step;
+    const lx = path.tz[i];
+    const lz = -path.tx[i];
+    const v = (r / rows) * vRepeat;
+    for (let k = 0; k < cols; k++) {
+      const p = profile[k];
+      const w = r * cols + k;
+      pos[w * 3] = path.px[i] + lx * p.o;
+      pos[w * 3 + 1] = path.py[i] + p.y;
+      pos[w * 3 + 2] = path.pz[i] + lz * p.o;
+      uv[w * 2] = p.u !== undefined ? p.u : p.o / uvScale;
+      uv[w * 2 + 1] = v;
+      if (col) {
+        const c = p.c !== undefined ? p.c : 1;
+        col[w * 3] = col[w * 3 + 1] = col[w * 3 + 2] = c;
+      }
+    }
+    if (r === rows) break;
+    if (mask && !mask(i)) continue;
+    for (let k = 0; k < cols - 1; k++) {
+      if (profile[k].cut) continue;
+      const a = r * cols + k;
+      const b = a + cols;
+      index.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  if (col) geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Mirror a left-side profile to the right, keeping offsets increasing. */
+const mirror = (profile) => profile.map((p) => ({ ...p, o: -p.o })).reverse()
+  .map((p, k, arr) => ({ ...p, cut: k < arr.length - 1 ? profile[profile.length - 2 - k].cut : false }));
+
+const RUNOFF_LOOK = {
+  grass: { textures: grassTextures, color: 0xffffff, uvScale: 7 },
+  sand: { textures: sandTextures, color: 0xffffff, uvScale: 9 },
+  asphalt: { textures: concreteTextures, color: 0x8a8a8a, uvScale: 5 }
+};
+
+/**
+ * Builds the drivable circuit (road, markings, kerbs, verges, barriers, start
+ * gantry) plus themed scenery, and owns their lifetime.
  */
 export class TrackBuilder {
   constructor(scene) {
     this.scene = scene;
-    this.trackGroup = new THREE.Group();
-    this.scene.add(this.trackGroup);
-
-    this.trackSpline = null;
-    this.checkpoints = [];
-    this.totalTrackLength = 0;
-    this.currentTrackId = 'apex';
+    this.group = null;
+    this.path = null;
+    this.def = null;
+    this.roadMaterial = null;
+    this.scenery = null;
   }
 
-  buildTrack(trackId = 'apex', weather = 'clear') {
-    // Clear existing track assets
-    while (this.trackGroup.children.length > 0) {
-      const obj = this.trackGroup.children[0];
-      if (obj.geometry) obj.geometry.dispose();
-      this.trackGroup.remove(obj);
-    }
+  build(trackId = 'apex') {
+    this.dispose();
+    const def = getTrackDef(trackId);
+    const path = new TrackPath(def);
+    this.def = def;
+    this.path = path;
+    this.group = new THREE.Group();
+    this.scene.add(this.group);
 
-    this.currentTrackId = trackId;
-    this.checkpoints = [];
-
-    // Define Track Control Points (Spline Path)
-    let points = [];
-    if (trackId === 'apex') {
-      // Apex Raceway (Monza style circuit with straight start/finish)
-      points = [
-        new THREE.Vector3(0, 0, 0),        // Start / Finish
-        new THREE.Vector3(0, 0, 180),      // Main Straight
-        new THREE.Vector3(-50, 0, 260),    // Turn 1 Apex
-        new THREE.Vector3(-160, 0, 240),   // Turn 2 Out
-        new THREE.Vector3(-220, 0, 140),   // Chicane
-        new THREE.Vector3(-180, 0, 20),    // Hairpin Entry
-        new THREE.Vector3(-100, 0, -80),   // Hairpin Apex
-        new THREE.Vector3(-180, 0, -200),  // Back Straight
-        new THREE.Vector3(-240, 0, -320),  // High Speed Curve
-        new THREE.Vector3(-120, 0, -380),  // Sector 2 Turn
-        new THREE.Vector3(0, 0, -360),     // Fast Sweeper
-        new THREE.Vector3(140, 0, -280),   // Turn 9
-        new THREE.Vector3(180, 0, -160),   // Sector 3 Hairpin
-        new THREE.Vector3(100, 0, -60),    // Final Corner Entry
-        new THREE.Vector3(0, 0, -60)       // Final Corner Exit -> Straight to Start
-      ];
-    } else if (trackId === 'city') {
-      points = [
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, 220),
-        new THREE.Vector3(-100, 0, 300),
-        new THREE.Vector3(-240, 0, 260),
-        new THREE.Vector3(-280, 0, 100),
-        new THREE.Vector3(-200, 0, -80),
-        new THREE.Vector3(-80, 0, -200),
-        new THREE.Vector3(120, 0, -220),
-        new THREE.Vector3(220, 0, -80),
-        new THREE.Vector3(0, 0, -60)
-      ];
-    } else {
-      points = [
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 4, 200),
-        new THREE.Vector3(-120, 10, 280),
-        new THREE.Vector3(-260, 4, 200),
-        new THREE.Vector3(-260, -4, 60),
-        new THREE.Vector3(-160, -8, -140),
-        new THREE.Vector3(-40, -2, -260),
-        new THREE.Vector3(140, 6, -280),
-        new THREE.Vector3(220, 8, -120),
-        new THREE.Vector3(0, 0, -60)
-      ];
-    }
-
-    // Catmull-Rom Curve for smooth track geometry
-    this.trackSpline = new THREE.CatmullRomCurve3(points, true, 'centripetal');
-    this.totalTrackLength = this.trackSpline.getLength();
-
-    // Build Track Surface Ribbon Geometry
-    const trackWidth = 26;
-    const numSegments = 400;
-    const trackGeo = new THREE.BufferGeometry();
-
-    const positions = [];
-    const uvs = [];
-    const normals = [];
-
-    const splinePoints = this.trackSpline.getSpacedPoints(numSegments);
-    const frenetFrames = this.trackSpline.computeFrenetFrames(numSegments, true);
-
-    for (let i = 0; i <= numSegments; i++) {
-      const p = splinePoints[i % numSegments];
-      const tangent = frenetFrames.tangents[i % numSegments];
-      const normal = frenetFrames.normals[i % numSegments];
-      const binormal = frenetFrames.binormals[i % numSegments];
-
-      // Side vector orthogonal to track direction
-      const side = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
-
-      // Left and right vertices of track
-      const leftP = new THREE.Vector3().copy(p).addScaledVector(side, -trackWidth / 2);
-      const rightP = new THREE.Vector3().copy(p).addScaledVector(side, trackWidth / 2);
-
-      positions.push(leftP.x, leftP.y, leftP.z);
-      positions.push(rightP.x, rightP.y, rightP.z);
-
-      normals.push(0, 1, 0, 0, 1, 0);
-
-      const u = i / 10; // Repeat texture along track length
-      uvs.push(0, u);
-      uvs.push(1, u);
-    }
-
-    const indices = [];
-    for (let i = 0; i < numSegments; i++) {
-      const idx = i * 2;
-      indices.push(idx, idx + 1, idx + 2);
-      indices.push(idx + 1, idx + 3, idx + 2);
-    }
-
-    trackGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    trackGeo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    trackGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    trackGeo.setIndex(indices);
-
-    // Track Material
-    let roadColor = 0x222225;
-    let roughness = 0.6;
-    if (trackId === 'city') {
-      roadColor = 0x15151a;
-      roughness = weather === 'rainy' ? 0.1 : 0.4;
-    } else if (trackId === 'desert') {
-      roadColor = 0x332822;
-      roughness = 0.8;
-    }
-
-    const trackMat = new THREE.MeshStandardMaterial({
-      color: roadColor,
-      roughness: roughness,
-      metalness: 0.2
-    });
-
-    const trackMesh = new THREE.Mesh(trackGeo, trackMat);
-    trackMesh.receiveShadow = true;
-    this.trackGroup.add(trackMesh);
-
-    // Build Kerbs & Barriers along track edge
-    this.buildTrackBorders(splinePoints, frenetFrames, numSegments, trackWidth, trackId);
-
-    // Build Props, Environment Terrain, and Start Arch
-    this.buildEnvironment(trackId);
-
-    // Setup Checkpoints for Lap Timing & Sector Split
-    const numCheckpoints = 12;
-    for (let i = 0; i < numCheckpoints; i++) {
-      const t = i / numCheckpoints;
-      const pt = this.trackSpline.getPoint(t);
-      this.checkpoints.push({
-        index: i,
-        position: pt,
-        isStartFinish: i === 0,
-        sector: Math.floor((i / numCheckpoints) * 3) + 1
-      });
-    }
-
-    return this.trackSpline;
-  }
-
-  buildTrackBorders(splinePoints, frenetFrames, numSegments, trackWidth, trackId) {
-    const kerbRedMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4 });
-    const kerbWhiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4 });
-    const neonBarrierMat = new THREE.MeshBasicMaterial({ color: 0x06b6d4 });
-
-    for (let i = 0; i < numSegments; i += 2) {
-      const p = splinePoints[i];
-      const tangent = frenetFrames.tangents[i];
-      const side = new THREE.Vector3().crossVectors(tangent, new THREE.Vector3(0, 1, 0)).normalize();
-
-      const leftEdge = new THREE.Vector3().copy(p).addScaledVector(side, -trackWidth / 2 - 0.4);
-      const rightEdge = new THREE.Vector3().copy(p).addScaledVector(side, trackWidth / 2 + 0.4);
-
-      if (trackId === 'city') {
-        // Neon Glow Barriers
-        const barrierGeo = new THREE.BoxGeometry(0.2, 0.8, 3.5);
-        const barrierL = new THREE.Mesh(barrierGeo, neonBarrierMat);
-        barrierL.position.copy(leftEdge);
-        barrierL.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
-        this.trackGroup.add(barrierL);
-
-        const barrierR = new THREE.Mesh(barrierGeo, neonBarrierMat);
-        barrierR.position.copy(rightEdge);
-        barrierR.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
-        this.trackGroup.add(barrierR);
-      } else {
-        // Racing Red/White Kerbs
-        const kerbGeo = new THREE.BoxGeometry(0.8, 0.15, 2.5);
-        const mat = (i / 2) % 2 === 0 ? kerbRedMat : kerbWhiteMat;
-
-        const kerbL = new THREE.Mesh(kerbGeo, mat);
-        kerbL.position.copy(leftEdge);
-        kerbL.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
-        this.trackGroup.add(kerbL);
-
-        const kerbR = new THREE.Mesh(kerbGeo, mat);
-        kerbR.position.copy(rightEdge);
-        kerbR.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tangent);
-        this.trackGroup.add(kerbR);
-      }
-    }
-  }
-
-  buildEnvironment(trackId) {
-    if (trackId === 'apex') {
-      // Grass Terrain
-      const terrainGeo = new THREE.PlaneGeometry(1200, 1200);
-      const terrainMat = new THREE.MeshStandardMaterial({ color: 0x1e3a1e, roughness: 0.9 });
-      const terrain = new THREE.Mesh(terrainGeo, terrainMat);
-      terrain.rotation.x = -Math.PI / 2;
-      terrain.position.y = -0.1;
-      terrain.receiveShadow = true;
-      this.trackGroup.add(terrain);
-
-      // Start / Finish Line Arch
-      this.createStartArch(new THREE.Vector3(0, 0, 0));
-    } else if (trackId === 'city') {
-      // City Ground & Skyscrapers
-      const groundGeo = new THREE.PlaneGeometry(1000, 1000);
-      const groundMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0f, roughness: 0.9 });
-      const ground = new THREE.Mesh(groundGeo, groundMat);
-      ground.rotation.x = -Math.PI / 2;
-      ground.position.y = -0.1;
-      this.trackGroup.add(ground);
-
-      // Procedural City Buildings around track
-      const bldgMat = new THREE.MeshStandardMaterial({ color: 0x11111d, roughness: 0.3, metalness: 0.8 });
-      for (let i = 0; i < 40; i++) {
-        const h = 40 + Math.random() * 120;
-        const w = 20 + Math.random() * 30;
-        const bldgGeo = new THREE.BoxGeometry(w, h, w);
-        const bldg = new THREE.Mesh(bldgGeo, bldgMat);
-
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 120 + Math.random() * 300;
-        bldg.position.set(Math.cos(angle) * dist, h / 2, Math.sin(angle) * dist);
-        this.trackGroup.add(bldg);
-      }
-
-      this.createStartArch(new THREE.Vector3(0, 0, 0));
-    } else if (trackId === 'desert') {
-      // Sand Terrain & Rock Formations
-      const sandGeo = new THREE.PlaneGeometry(1200, 1200);
-      const sandMat = new THREE.MeshStandardMaterial({ color: 0x9a6b43, roughness: 0.95 });
-      const sand = new THREE.Mesh(sandGeo, sandMat);
-      sand.rotation.x = -Math.PI / 2;
-      sand.position.y = -0.1;
-      sand.receiveShadow = true;
-      this.trackGroup.add(sand);
-
-      this.createStartArch(new THREE.Vector3(0, 0, 0));
-    }
-  }
-
-  createStartArch(position) {
-    const archGroup = new THREE.Group();
-    archGroup.position.copy(position);
-
-    const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9, roughness: 0.2 });
-    const bannerMat = new THREE.MeshBasicMaterial({ color: 0xdc2626 });
-
-    // Pillars
-    const p1 = new THREE.Mesh(new THREE.BoxGeometry(1, 8, 1), metalMat);
-    p1.position.set(-11, 4, 0);
-
-    const p2 = new THREE.Mesh(new THREE.BoxGeometry(1, 8, 1), metalMat);
-    p2.position.set(11, 4, 0);
-
-    // Crossbar
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(23, 1.5, 1.2), metalMat);
-    bar.position.set(0, 7.5, 0);
-
-    // Banner Text Plate
-    const banner = new THREE.Mesh(new THREE.BoxGeometry(16, 1.0, 0.1), bannerMat);
-    banner.position.set(0, 7.5, 0.65);
-
-    archGroup.add(p1, p2, bar, banner);
-    this.trackGroup.add(archGroup);
-  }
-
-  getClosestPointOnTrack(position) {
-    if (!this.trackSpline) return { point: position, progress: 0, distanceFromCenter: 0 };
-
-    // Sample points to find nearest spline parameter t (2D XZ distance)
-    let minDistanceSq = Infinity;
-    let closestT = 0;
-    const samples = 400;
-
-    for (let i = 0; i <= samples; i++) {
-      const t = i / samples;
-      const pt = this.trackSpline.getPoint(t);
-      const dx = pt.x - position.x;
-      const dz = pt.z - position.z;
-      const distSq = dx * dx + dz * dz;
-      if (distSq < minDistanceSq) {
-        minDistanceSq = distSq;
-        closestT = t;
-      }
-    }
-
-    const closestPt = this.trackSpline.getPoint(closestT);
-    const dist2D = Math.sqrt(minDistanceSq);
-
-    return {
-      point: closestPt,
-      tangent: this.trackSpline.getTangent(closestT),
-      progress: closestT,
-      distanceFromCenter: dist2D
+    const hw = path.halfWidth;
+    const wo = path.wallOffset;
+    const add = (geo, mat, { cast = false, receive = true } = {}) => {
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive;
+      this.group.add(mesh);
+      return mesh;
     };
+
+    // Road surface, slightly darker along the racing line
+    const asphalt = asphaltTextures();
+    this.roadMaterial = new THREE.MeshStandardMaterial({
+      map: asphalt.map,
+      normalMap: asphalt.normalMap,
+      normalScale: new THREE.Vector2(0.3, 0.3),
+      roughness: 0.86,
+      metalness: 0,
+      vertexColors: true
+    });
+    add(sweep(path, [
+      { o: -hw, y: 0, c: 1 }, { o: -hw * 0.55, y: 0, c: 0.92 }, { o: 0, y: 0, c: 0.8 },
+      { o: hw * 0.55, y: 0, c: 0.92 }, { o: hw, y: 0, c: 1 }
+    ], { uvScale: 5, colors: true }), this.roadMaterial);
+
+    // Painted lines sit a hair above the road; polygon offset stops z-fighting
+    const paint = new THREE.MeshStandardMaterial({
+      color: 0xe8e8e8, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+    });
+    const edge = [{ o: hw - 0.5, y: 0.012 }, { o: hw - 0.3, y: 0.012 }];
+    add(sweep(path, edge), paint);
+    add(sweep(path, mirror(edge)), paint);
+    if (def.theme === 'city') {
+      const dashed = (i) => (i * path.ds) % 12 < 4;
+      for (const o of [-hw / 3, hw / 3]) {
+        add(sweep(path, [{ o: o - 0.08, y: 0.012 }, { o: o + 0.08, y: 0.012 }], { step: 1, mask: dashed }), paint);
+      }
+    }
+
+    // Kerbs through the corners
+    if (def.kerbs) {
+      const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTexture(), roughness: 0.55 });
+      const kerb = [
+        { o: hw - 0.05, y: 0.012, u: 0 }, { o: hw + 0.7, y: 0.075, u: 0.5 }, { o: hw + 1.35, y: 0.02, u: 1 }
+      ];
+      const onKerb = (i) => path.kerb[i] !== 0;
+      add(sweep(path, kerb, { step: 1, uvScale: 3, mask: onKerb }), kerbMat);
+      add(sweep(path, mirror(kerb), { step: 1, uvScale: 3, mask: onKerb }), kerbMat);
+    }
+
+    // Run-off between the road and the barrier, then a skirt that tucks under the terrain
+    const look = RUNOFF_LOOK[def.runoffSurface] || RUNOFF_LOOK.grass;
+    const vergeTex = look.textures();
+    const vergeMat = new THREE.MeshStandardMaterial({
+      map: vergeTex.map, normalMap: vergeTex.normalMap, color: look.color, roughness: 0.95
+    });
+    const verge = [{ o: hw, y: -0.004 }, { o: wo + 0.4, y: -0.004 }, { o: wo + 28, y: -0.95 }];
+    add(sweep(path, verge, { uvScale: look.uvScale }), vergeMat);
+    add(sweep(path, mirror(verge), { uvScale: look.uvScale }), vergeMat);
+
+    // Barriers: these line up exactly with the physics wall
+    const wallH = def.theme === 'city' ? 1.15 : 0.95;
+    const concrete = concreteTextures();
+    const wallMat = new THREE.MeshStandardMaterial({
+      map: concrete.map, normalMap: concrete.normalMap, roughness: 0.8, side: THREE.DoubleSide,
+      color: def.theme === 'desert' ? 0xd8b48c : 0xdcdcdc
+    });
+    const wall = [
+      { o: wo, y: -0.1, u: 0 }, { o: wo, y: wallH, u: 0.3, cut: true },
+      { o: wo, y: wallH, u: 0.3 }, { o: wo + 0.4, y: wallH, u: 0.42, cut: true },
+      { o: wo + 0.4, y: wallH, u: 0.42 }, { o: wo + 0.4, y: -0.6, u: 0.8 }
+    ];
+    add(sweep(path, wall, { uvScale: 3 }), wallMat, { cast: true });
+    add(sweep(path, mirror(wall), { uvScale: 3 }), wallMat, { cast: true });
+
+    const band = (o, y0, y1) => [{ o, y: y0, u: 0 }, { o, y: y1, u: 1 }];
+    if (def.theme === 'city') {
+      // Neon strips along the barrier tops; HDR colours so they bloom
+      const cyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.12, 1.5, 2.0), side: THREE.DoubleSide });
+      const pink = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.0, 0.22, 1.15), side: THREE.DoubleSide });
+      add(sweep(path, band(wo - 0.015, wallH - 0.2, wallH - 0.06)), cyan, { receive: false });
+      add(sweep(path, band(-wo + 0.015, wallH - 0.2, wallH - 0.06)), pink, { receive: false });
+    } else if (def.theme === 'apex') {
+      const capMat = new THREE.MeshStandardMaterial({ map: kerbTexture(), roughness: 0.6, side: THREE.DoubleSide });
+      add(sweep(path, band(wo - 0.012, wallH - 0.3, wallH), { uvScale: 8 }), capMat);
+      add(sweep(path, band(-wo + 0.012, wallH - 0.3, wallH), { uvScale: 8 }), capMat);
+    }
+
+    this.buildStartLine(path, hw, wo);
+    this.scenery = buildScenery(path, def, this.group);
+    return path;
+  }
+
+  buildStartLine(path, hw, wo) {
+    const origin = path.pointAt(0);
+    const heading = path.headingAt(0);
+    const start = new THREE.Group();
+    start.position.copy(origin);
+    start.rotation.y = heading;
+    this.group.add(start);
+
+    // Chequered line
+    const lineGeo = new THREE.PlaneGeometry(hw * 2 - 1, 1.6);
+    const uv = lineGeo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (hw * 2 - 1) / 1.6, uv.getY(i));
+    lineGeo.rotateX(-Math.PI / 2);
+    const decal = { polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 };
+    const line = new THREE.Mesh(lineGeo, new THREE.MeshStandardMaterial({ map: checkerTexture(), roughness: 0.6, ...decal }));
+    line.position.y = 0.014;
+    line.receiveShadow = true;
+    start.add(line);
+
+    // Grid slots behind the line
+    const slotMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, roughness: 0.6, ...decal });
+    for (let i = 0; i < 6; i++) {
+      const slot = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.18).rotateX(-Math.PI / 2), slotMat);
+      slot.position.set(i % 2 ? -2.6 : 2.6, 0.014, -10 - i * 8);
+      slot.receiveShadow = true;
+      start.add(slot);
+    }
+
+    // Gantry
+    const steel = new THREE.MeshStandardMaterial({ color: 0x2b2f36, metalness: 0.8, roughness: 0.35 });
+    const span = wo + 1.2;
+    for (const x of [-span, span]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.7, 8.4, 0.7), steel);
+      post.position.set(x, 4.2, 0);
+      post.castShadow = true;
+      start.add(post);
+    }
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(span * 2 + 0.7, 1.5, 0.9), steel);
+    beam.position.set(0, 7.9, 0);
+    beam.castShadow = true;
+    start.add(beam);
+
+    const bannerMat = new THREE.MeshBasicMaterial({ map: bannerTexture(0), side: THREE.DoubleSide });
+    for (const z of [-0.47, 0.47]) {
+      const banner = new THREE.Mesh(new THREE.PlaneGeometry(13, 1.25), bannerMat);
+      banner.position.set(0, 7.9, z);
+      if (z < 0) banner.rotation.y = Math.PI;
+      start.add(banner);
+    }
+
+    // Start lights facing the grid
+    const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.08, 1.7, 0.3) });
+    for (let i = 0; i < 5; i++) {
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), lampMat);
+      lamp.position.set((i - 2) * 0.8, 6.85, -0.5);
+      start.add(lamp);
+    }
+  }
+
+  /** Rain: darker, glossier tarmac that mirrors the sky. */
+  setWet(wet) {
+    if (!this.roadMaterial) return;
+    this.roadMaterial.roughness = wet ? 0.22 : 0.86;
+    this.roadMaterial.color.setScalar(wet ? 0.62 : 1);
+    this.roadMaterial.normalScale.setScalar(wet ? 0.15 : 0.3);
+    this.roadMaterial.envMapIntensity = wet ? 1.5 : 1;
+  }
+
+  /** Night/day switch for scenery lighting (windows, lamps, light pools). */
+  setLook(look) {
+    this.setWet(look.wet);
+    if (this.scenery) this.scenery.setLook(look);
+  }
+
+  dispose() {
+    if (!this.group) return;
+    this.scene.remove(this.group);
+    // Textures are shared via the procedural cache, so only geometry and materials go
+    this.group.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) [].concat(obj.material).forEach((m) => m.dispose());
+      if (obj.userData.ownTextures) obj.userData.ownTextures.forEach((t) => t.dispose());
+    });
+    this.group = null;
+    this.scenery = null;
+    this.roadMaterial = null;
   }
 }

@@ -13,7 +13,7 @@ export class GarageUI {
       bodyColor: 0xdc2626,
       paintFinish: 'metallic',
       wingStyle: 'gt3',
-      rimColor: 0x111111,
+      rimColor: 0x18181b,
       engineHp: 650
     };
 
@@ -29,7 +29,7 @@ export class GarageUI {
 
   setupListeners() {
     // Body Paint Swatches
-    const swatches = document.querySelectorAll('.color-swatch');
+    const swatches = document.querySelectorAll('.body-swatch');
     swatches.forEach(swatch => {
       swatch.addEventListener('click', (e) => {
         const colorHex = parseInt(e.target.dataset.color, 16);
@@ -48,6 +48,17 @@ export class GarageUI {
         this.currentConfig.paintFinish = finish;
         finishBtns.forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
+        this.applyChanges();
+      });
+    });
+
+    // Wheel Rim Colour
+    const rimSwatches = document.querySelectorAll('.rim-swatch');
+    rimSwatches.forEach(swatch => {
+      swatch.addEventListener('click', (e) => {
+        this.currentConfig.rimColor = parseInt(e.target.dataset.color, 16);
+        rimSwatches.forEach(s => s.classList.remove('selected'));
+        e.target.classList.add('selected');
         this.applyChanges();
       });
     });
@@ -72,16 +83,9 @@ export class GarageUI {
         this.currentConfig.engineHp = hp;
         tuneBtns.forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
-        if (this.onEngineTuneChange) this.onEngineTuneChange(hp);
-        this.updateStatsDisplay();
+        this.applyTune();
       });
     });
-
-    // Close Garage Button
-    const closeBtn = document.getElementById('garage-close-btn');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => this.toggle());
-    }
   }
 
   applyChanges() {
@@ -90,12 +94,19 @@ export class GarageUI {
     }
   }
 
-  updateStatsDisplay() {
+  /** Push the engine preset to the car; the callback reports the resulting top speed. */
+  applyTune() {
     const hp = this.currentConfig.engineHp;
+    const topSpeed = this.onEngineTuneChange ? this.onEngineTuneChange(hp) : 0;
     const hpBar = document.getElementById('stat-power-bar');
     const speedBar = document.getElementById('stat-speed-bar');
-
     if (hpBar) hpBar.style.width = `${(hp / 850) * 100}%`;
-    if (speedBar) speedBar.style.width = `${(hp / 850) * 100}%`;
+    if (speedBar && topSpeed) speedBar.style.width = `${Math.min(100, (topSpeed / 340) * 100)}%`;
+  }
+
+  /** Apply the defaults shown in the panel so the car matches the UI from the first frame. */
+  applyAll() {
+    this.applyChanges();
+    this.applyTune();
   }
 }

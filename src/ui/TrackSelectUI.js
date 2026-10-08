@@ -10,14 +10,26 @@ export class TrackSelectUI {
     this.currentTrack = 'apex';
     this.currentTOD = 'noon';
     this.currentWeather = 'clear';
+    this.visible = false;
 
     this.setupListeners();
   }
 
   toggle() {
+    this.visible = !this.visible;
     if (this.modal) {
-      this.modal.classList.toggle('hidden');
+      this.modal.classList.toggle('hidden', !this.visible);
     }
+  }
+
+  /** Reflect the state the game actually loaded (e.g. a circuit's default time of day). */
+  sync(trackId, timeOfDay, weather) {
+    this.currentTrack = trackId;
+    this.currentTOD = timeOfDay;
+    this.currentWeather = weather;
+    document.querySelectorAll('.track-card').forEach(c => c.classList.toggle('selected', c.dataset.track === trackId));
+    document.querySelectorAll('.tod-btn').forEach(b => b.classList.toggle('active', b.dataset.tod === timeOfDay));
+    document.querySelectorAll('.weather-btn').forEach(b => b.classList.toggle('active', b.dataset.weather === weather));
   }
 
   setupListeners() {
@@ -25,14 +37,9 @@ export class TrackSelectUI {
     const trackBtns = document.querySelectorAll('.track-card');
     trackBtns.forEach(card => {
       card.addEventListener('click', (e) => {
-        const trackId = card.dataset.track;
-        this.currentTrack = trackId;
-        trackBtns.forEach(c => c.classList.remove('selected'));
-        card.classList.add('selected');
-
-        if (this.onChangeTrack) {
-          this.onChangeTrack(this.currentTrack, this.currentWeather);
-        }
+        if (card.dataset.track === this.currentTrack) return;
+        // The game calls sync() back with the circuit's default time of day
+        if (this.onChangeTrack) this.onChangeTrack(card.dataset.track);
       });
     });
 
