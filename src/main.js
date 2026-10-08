@@ -11,6 +11,7 @@ import { TelemetryUI } from './ui/Telemetry.js';
 import { GarageUI } from './ui/GarageUI.js';
 import { TrackSelectUI } from './ui/TrackSelectUI.js';
 import { TouchControls } from './ui/TouchControls.js';
+import { t, applyTranslations } from './i18n.js';
 
 class CorsaApp {
   constructor() {
@@ -142,7 +143,7 @@ class CorsaApp {
       const next = this.physics.drivingMode === 'easy' ? 'normal' : 'easy';
       this.physics.setDrivingMode(next);
       const label = document.getElementById('mode-label');
-      if (label) label.textContent = next === 'easy' ? 'かんたんモード' : 'ノーマルモード';
+      if (label) label.textContent = t(next === 'easy' ? 'mode.easy' : 'mode.normal');
     });
     on('btn-camera', () => this.cycleCamera());
     on('btn-garage', () => this.toggleGarage());
@@ -266,5 +267,6 @@ class CorsaApp {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  applyTranslations();
   window.corsa = new CorsaApp();
 });

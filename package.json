@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check": "node scripts/sim-check.mjs",
     "check:browser": "node scripts/browser-check.mjs",
-    "check:mobile": "node scripts/mobile-check.mjs"
+    "check:mobile": "node scripts/mobile-check.mjs",
+    "check:i18n": "node scripts/i18n-check.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

@@ -1013,3 +1013,8 @@ body.touch.menu-open .touch-overlay { display: none; }
 @media (max-height: 520px) and (max-width: 700px) {
   .badge { display: none; }
 }
+
+/* Translated text is filled in by script; keep it out of sight until then so the wrong language never flashes */
+html:not([data-i18n-ready]) [data-i18n] {
+  visibility: hidden;
+}

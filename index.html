@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
@@ -25,19 +25,19 @@
       <h1>CORSA GT</h1>
       <p class="subtitle">3D GT RACING & DRIVING SIMULATOR</p>
       <button id="start-btn" class="btn-primary">
-        <span>ENGINE START (タップ / クリックで開始)</span>
+        <span data-i18n="start.button">ENGINE START (tap / click)</span>
       </button>
       <div class="control-hints key-hints">
-        <span><kbd>W</kbd> / <kbd>↑</kbd> アクセル | <kbd>S</kbd> / <kbd>↓</kbd> ブレーキ・バック</span>
-        <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> ステアリング | <kbd>SPACE</kbd> ハンドブレーキ</span>
-        <span><kbd>M</kbd> AT/MT 切替 | <kbd>E</kbd> / <kbd>Q</kbd> シフトアップ/ダウン (MT)</span>
-        <span><kbd>C</kbd> カメラ | <kbd>R</kbd> コース復帰 | <kbd>P</kbd> ポーズ | <kbd>G</kbd> ガレージ | <kbd>T</kbd> テレメトリ</span>
+        <span data-i18n="hint.pedals"></span>
+        <span data-i18n="hint.steer"></span>
+        <span data-i18n="hint.gears"></span>
+        <span data-i18n="hint.misc"></span>
       </div>
       <div class="control-hints touch-hints">
-        <span>📱 端末を<strong>横向き</strong>にしてプレイ</span>
-        <span>左親指: ステアリングパッドを左右にスライド</span>
-        <span>右親指: <strong>GAS</strong> アクセル / <strong>BRAKE</strong> ブレーキ・バック</span>
-        <span><strong>HB</strong> ハンドブレーキ | <strong>↺</strong> コース復帰</span>
+        <span data-i18n="touch.landscape"></span>
+        <span data-i18n="touch.steer"></span>
+        <span data-i18n="touch.pedals"></span>
+        <span data-i18n="touch.aux"></span>
       </div>
     </div>
   </div>
@@ -45,14 +45,14 @@
   <!-- Shown on touch devices held upright -->
   <div id="rotate-overlay">
     <div class="rotate-icon">📱</div>
-    <p>端末を横向きにしてください</p>
+    <p data-i18n="rotate.prompt"></p>
   </div>
 
   <!-- Pause Overlay -->
   <div id="pause-overlay" class="overlay-fullscreen hidden">
     <div class="start-card glassmorphism">
       <h1>PAUSED</h1>
-      <p class="subtitle">クリックまたは <kbd>P</kbd> で再開</p>
+      <p class="subtitle" data-i18n="pause.resume"></p>
     </div>
   </div>
 
@@ -63,26 +63,26 @@
       <span id="track-name-badge" class="badge">APEX CIRCUIT</span>
     </div>
     <div class="nav-actions">
-      <button id="btn-mode" class="btn-icon btn-mode-accent" title="アシストモード切替">
-        <span class="icon">🔰</span> <span id="mode-label">かんたんモード</span>
+      <button id="btn-mode" class="btn-icon btn-mode-accent" data-i18n-title="mode.title">
+        <span class="icon">🔰</span> <span id="mode-label" data-i18n="mode.easy"></span>
       </button>
-      <button id="btn-camera" class="btn-icon" title="カメラ切替 [C]">
+      <button id="btn-camera" class="btn-icon" data-i18n-title="nav.camera.title">
         <span class="icon">📷</span> <span id="camera-mode-label">CHASE</span>
       </button>
-      <button id="btn-garage" class="btn-icon" title="車両カスタマイズ [G]">
-        <span class="icon">🔧</span> ガレージ
+      <button id="btn-garage" class="btn-icon" data-i18n-title="nav.garage.title">
+        <span class="icon">🔧</span> <span data-i18n="nav.garage"></span>
       </button>
-      <button id="btn-track" class="btn-icon" title="コース選択">
-        <span class="icon">🏁</span> コース選択
+      <button id="btn-track" class="btn-icon" data-i18n-title="nav.track.title">
+        <span class="icon">🏁</span> <span data-i18n="nav.track"></span>
       </button>
-      <button id="btn-telemetry" class="btn-icon" title="テレメトリ [T]">
-        <span class="icon">📊</span> テレメトリ
+      <button id="btn-telemetry" class="btn-icon" data-i18n-title="nav.telemetry.title">
+        <span class="icon">📊</span> <span data-i18n="nav.telemetry"></span>
       </button>
-      <button id="btn-audio" class="btn-icon" title="サウンド Mute/Unmute">
+      <button id="btn-audio" class="btn-icon" data-i18n-title="nav.audio.title">
         <span id="audio-icon" class="icon">🔊</span>
       </button>
-      <button id="btn-reset" class="btn-icon" title="スタート地点からやり直す ([R] はその場でコース復帰)">
-        <span class="icon">↺</span> リスタート
+      <button id="btn-reset" class="btn-icon" data-i18n-title="nav.restart.title">
+        <span class="icon">↺</span> <span data-i18n="nav.restart"></span>
       </button>
     </div>
   </nav>
@@ -136,7 +136,7 @@
         </div>
         <div class="rpm-numeric">
           <span id="hud-rpm-val">1000</span> <span class="unit">RPM</span>
-          <span id="hud-trans" class="trans-badge" title="トランスミッション [M]">AT</span>
+          <span id="hud-trans" class="trans-badge" data-i18n-title="hud.trans.title">AT</span>
         </div>
       </div>
     </div>
@@ -337,8 +337,8 @@
     </div>
     <div class="touch-right">
       <div class="touch-aux">
-        <button id="touch-recover-btn" class="touch-btn small" aria-label="コース復帰">↺</button>
-        <button id="touch-handbrake-btn" class="touch-btn small" aria-label="ハンドブレーキ">HB</button>
+        <button id="touch-recover-btn" class="touch-btn small" data-i18n-aria="touch.recover.label">↺</button>
+        <button id="touch-handbrake-btn" class="touch-btn small" data-i18n-aria="touch.handbrake.label">HB</button>
       </div>
       <div class="touch-pedals">
         <button id="touch-brake-btn" class="touch-btn brake">BRAKE</button>
