@@ -4,6 +4,18 @@ English | [日本語](README.ja.md)
 
 A 3D GT racing and driving game that runs in the browser. Built with [Three.js](https://threejs.org/) and [Vite](https://vite.dev/); every model, texture and sound is generated in code, so there are no asset files to download.
 
+![Corsa GT: chasing the car through a corner at Apex Circuit](docs/screenshots/apex-noon.jpg)
+
+| Neo City Highway at midnight | Desert Canyon at sunset |
+| :---: | :---: |
+| ![Night street circuit lit by neon barriers and street lamps](docs/screenshots/city-night.jpg) | ![Canyon road between sandstone mesas at sunset](docs/screenshots/desert-sunset.jpg) |
+| **Rain at Apex Circuit** | **Garage** |
+| ![Wet, reflective track in the rain](docs/screenshots/apex-rain.jpg) | ![Garage panel beside the car in the orbit view](docs/screenshots/garage.jpg) |
+
+On a phone in landscape:
+
+![Touch layout: steering pad on the left, pedals on the right](docs/screenshots/mobile.jpg)
+
 ## Features
 
 - **Three circuits** — a parkland circuit (Apex Circuit), a neon street circuit at night (Neo City Highway) and a canyon road with elevation changes (Desert Canyon).
@@ -145,6 +157,7 @@ src/
   ui/                   HUD, telemetry, garage, track select, touch controls
   utils/                Input handling, math helpers
 scripts/                Check scripts
+docs/screenshots/       Images used in the READMEs
 ```
 
 ## License

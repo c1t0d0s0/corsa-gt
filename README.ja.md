@@ -4,6 +4,20 @@
 
 ブラウザで動く 3D の GT レーシング/ドライビングゲームです。[Three.js](https://threejs.org/) と [Vite](https://vite.dev/) で作られており、モデル・テクスチャ・サウンドはすべてコードで生成しているため、ダウンロードが必要なアセットファイルはありません。
 
+![Corsa GT: Apex Circuit のコーナーを追従カメラで走行中](docs/screenshots/apex-noon.jpg)
+
+| 深夜の Neo City Highway | 夕暮れの Desert Canyon |
+| :---: | :---: |
+| ![ネオンのバリアと街灯に照らされた夜の市街地コース](docs/screenshots/city-night.jpg) | ![夕日に染まるメサの間を抜ける峡谷の道](docs/screenshots/desert-sunset.jpg) |
+| **雨の Apex Circuit** | **ガレージ** |
+| ![雨で濡れて反射する路面](docs/screenshots/apex-rain.jpg) | ![オービットカメラの車の横に表示されるガレージパネル](docs/screenshots/garage.jpg) |
+
+スマートフォンの横向き表示:
+
+![タッチ操作のレイアウト: 左にステアリングパッド、右にペダル](docs/screenshots/mobile.jpg)
+
+スクリーンショットは英語表示で撮影しています。
+
 ## 特徴
 
 - **3 つのコース** — 緑に囲まれたサーキット (Apex Circuit)、ネオンが光る夜の市街地 (Neo City Highway)、起伏のある峡谷の道 (Desert Canyon)。
@@ -145,6 +159,7 @@ src/
   ui/                   HUD、テレメトリ、ガレージ、コース選択、タッチ操作
   utils/                入力処理、数学ユーティリティ
 scripts/                チェック用スクリプト
+docs/screenshots/       README 用の画像
 ```
 
 ## ライセンス
