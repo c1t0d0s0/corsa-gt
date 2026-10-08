@@ -126,6 +126,7 @@ npm run check           # 物理とコースレイアウト。Node 上でヘッ�
 npm run check:browser   # メニュー、カメラ、キーボード走行、コース切り替え
 npm run check:mobile    # スマートフォンのレイアウトとマルチタッチ操作
 npm run check:i18n      # 表示言語の切り替え
+npm run check:audio     # エンジン音(音程、音量、音割れなし)
 ```
 
 いずれも、URL とスクリーンショットの出力先ディレクトリを引数で指定できます。
@@ -154,7 +155,7 @@ src/
     Scenery.js          地形、樹木、市街地、峡谷
     Effects.js          タイヤスモーク、スキッドマーク、雨
     ProceduralTextures.js
-    AudioEngine.js      エンジン音とタイヤ音の合成
+    AudioEngine.js      エンジン・排気・ターボ・風・タイヤ音の合成
     track/              コース定義とセンターラインの検索
   ui/                   HUD、テレメトリ、ガレージ、コース選択、タッチ操作
   utils/                入力処理、数学ユーティリティ

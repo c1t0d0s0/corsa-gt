@@ -93,6 +93,7 @@ class CorsaApp {
   setCamera(mode) {
     const applied = this.renderer.setCameraMode(mode);
     this.carModel.setInteriorVisible(applied === 'cockpit');
+    this.audio.setInterior(applied === 'cockpit');
     const label = document.getElementById('camera-mode-label');
     if (label) label.textContent = applied.toUpperCase();
     return applied;
@@ -244,15 +245,23 @@ class CorsaApp {
     this.carModel.update(this.physics, running ? dt : 0);
 
     if (this.physics.shiftEvent !== 0) {
-      if (running && this.physics.speedKmh > 20) this.audio.playBackfire();
+      // Harder shifts (more revs, more throttle) bark louder
+      const intensity = 0.4 + 0.6 * this.physics.throttle * (this.physics.rpm / this.physics.maxRpm);
+      if (running && this.physics.speedKmh > 15) this.audio.playShift(this.physics.shiftEvent, intensity);
       this.physics.shiftEvent = 0;
     }
-    this.audio.update(
-      this.physics.rpm,
-      running ? this.physics.throttle : 0,
-      running ? this.physics.slipAmount : 0,
-      this.physics.speedKmh
-    );
+    this.audio.update({
+      rpm: this.physics.rpm,
+      maxRpm: this.physics.maxRpm,
+      throttle: this.physics.throttle,
+      cut: this.physics.shiftTimer > 0.13,
+      slip: this.physics.slipAmount,
+      speedKmh: this.physics.speedKmh,
+      surface: this.physics.surface,
+      wet: this.weather === 'rainy',
+      wallHit: this.physics.wallHit,
+      running
+    }, dt);
 
     this.renderer.update(this.carModel.group, this.physics, dt);
     const cam = this.renderer.camera;

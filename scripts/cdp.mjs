@@ -9,6 +9,7 @@ export async function openBrowser({ port = 9333, shotDir = null } = {}) {
   const chrome = spawn(process.env.CHROME || 'chromium', [
     '--headless=new', '--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
     '--ignore-gpu-blocklist', '--window-size=1280,720', '--hide-scrollbars',
+    '--autoplay-policy=no-user-gesture-required', // scripted clicks don't count as gestures; let audio run
     `--remote-debugging-port=${port}`, 'about:blank'
   ], { stdio: 'ignore' });
 

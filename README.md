@@ -124,6 +124,7 @@ The remaining checks drive the real app in headless Chromium. Start `npm run dev
 npm run check:browser   # menus, cameras, keyboard driving, track switching
 npm run check:mobile    # phone layout and multi-touch controls
 npm run check:i18n      # language selection
+npm run check:audio     # engine sound: pitch, loudness, no clipping
 ```
 
 Each takes an optional URL and a directory to write screenshots to:
@@ -152,7 +153,7 @@ src/
     Scenery.js          Terrain, trees, city, canyon
     Effects.js          Tyre smoke, skid marks, rain
     ProceduralTextures.js
-    AudioEngine.js      Synthesised engine and tyre sound
+    AudioEngine.js      Synthesised engine, exhaust, turbo, wind and tyre sound
     track/              Circuit definitions and centreline queries
   ui/                   HUD, telemetry, garage, track select, touch controls
   utils/                Input handling, math helpers
