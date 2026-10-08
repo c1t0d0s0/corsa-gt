@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corsa GT - 3D GT Racing & Driving Simulator</title>
+  <meta name="description" content="High-performance web-based 3D GT Racing & Driving Simulator with Three.js graphics, custom car physics, procedural audio engine, and telemetry HUD.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <!-- 3D WebGL Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Audio Unlock / Start Overlay -->
+  <div id="audio-start-overlay" class="overlay-fullscreen">
+    <div class="start-card glassmorphism">
+      <div class="logo-icon">🏎️</div>
+      <h1>CORSA GT</h1>
+      <p class="subtitle">3D GT RACING & DRIVING SIMULATOR</p>
+      <button id="start-btn" class="btn-primary">
+        <span>ENGINE START (クリックして開始)</span>
+      </button>
+      <div class="control-hints">
+        <span><kbd>W</kbd> / <kbd>X</kbd> / <kbd>↑</kbd> アクセル | <kbd>S</kbd> / <kbd>Z</kbd> / <kbd>↓</kbd> ブレーキ</span>
+        <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> ステアリング | <kbd>SPACE</kbd> ハンドブレーキ</span>
+        <span><kbd>C</kbd> カメラ | <kbd>G</kbd> ガレージ | <kbd>T</kbd> テレメトリ | <kbd>R</kbd> リセット</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Action Navigation Bar -->
+  <nav class="top-nav glassmorphism">
+    <div class="brand">
+      <span class="brand-title">CORSA <span class="text-accent">GT</span></span>
+      <span id="track-name-badge" class="badge">APEX CIRCUIT</span>
+    </div>
+    <div class="nav-actions">
+      <button id="btn-mode" class="btn-icon btn-mode-accent" title="アシストモード切替">
+        <span class="icon">🔰</span> <span id="mode-label">かんたんモード</span>
+      </button>
+      <button id="btn-camera" class="btn-icon" title="カメラ切替 [C]">
+        <span class="icon">📷</span> <span id="camera-mode-label">CHASE</span>
+      </button>
+      <button id="btn-garage" class="btn-icon" title="車両カスタマイズ [G]">
+        <span class="icon">🔧</span> ガレージ
+      </button>
+      <button id="btn-track" class="btn-icon" title="コース選択">
+        <span class="icon">🏁</span> コース選択
+      </button>
+      <button id="btn-telemetry" class="btn-icon" title="テレメトリ [T]">
+        <span class="icon">📊</span> テレメトリ
+      </button>
+      <button id="btn-audio" class="btn-icon" title="サウンド Mute/Unmute">
+        <span id="audio-icon" class="icon">🔊</span>
+      </button>
+      <button id="btn-reset" class="btn-icon" title="車位置リセット [R]">
+        <span class="icon">↺</span> リセット
+      </button>
+    </div>
+  </nav>
+
+  <!-- HUD Dashboard Overlay -->
+  <div id="hud-overlay">
+    <!-- Top Left: Lap Timing & Sector Splits -->
+    <div class="hud-box hud-lap-box glassmorphism">
+      <div class="lap-header">
+        <span id="hud-lap-num" class="hud-label-accent">LAP 1</span>
+        <span id="hud-sector" class="hud-label-muted">SECTOR 1</span>
+      </div>
+      <div class="lap-time-row">
+        <span class="label">CURRENT</span>
+        <span id="hud-lap-current" class="digital-time">00:00.00</span>
+      </div>
+      <div class="lap-time-row">
+        <span class="label">BEST</span>
+        <span id="hud-lap-best" class="digital-time text-accent">--:--.--</span>
+      </div>
+    </div>
+
+    <!-- Top Right: Interactive Mini-Map -->
+    <div class="hud-box hud-minimap-box glassmorphism">
+      <canvas id="hud-minimap-canvas" width="160" height="160"></canvas>
+    </div>
+
+    <!-- Bottom Center: Main Speedometer & Tachometer Gauge -->
+    <div class="hud-center-cluster">
+      <!-- Shift LED Lights Row -->
+      <div class="shift-lights-row">
+        <div class="shift-light green"></div>
+        <div class="shift-light green"></div>
+        <div class="shift-light yellow"></div>
+        <div class="shift-light yellow"></div>
+        <div class="shift-light red"></div>
+      </div>
+
+      <!-- Gear & Speed Cluster -->
+      <div class="gauge-card glassmorphism">
+        <div class="gear-display">
+          <span id="hud-gear-val">1</span>
+        </div>
+        <div class="speed-display">
+          <span id="hud-speed-val">0</span>
+          <span id="hud-speed-unit" class="unit">KM/H</span>
+        </div>
+        <!-- RPM Bar -->
+        <div class="rpm-container">
+          <div id="hud-tach-bar" class="rpm-bar"></div>
+        </div>
+        <div class="rpm-numeric">
+          <span id="hud-rpm-val">1000</span> <span class="unit">RPM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Telemetry Diagnostic Overlay Panel (Toggle with T or button) -->
+  <div id="telemetry-panel" class="glassmorphism hidden">
+    <div class="telemetry-header">
+      <h3>LIVE TELEMETRY DIAGNOSTICS</h3>
+      <span class="sub">REAL-TIME DYNAMICS ANALYZER</span>
+    </div>
+    <div class="telemetry-grid">
+      <!-- G-Force Matrix -->
+      <div class="telemetry-card">
+        <h4>G-FORCE MATRIX</h4>
+        <canvas id="telemetry-gforce-canvas" width="120" height="120"></canvas>
+      </div>
+
+      <!-- Pedal & Input Load Bars -->
+      <div class="telemetry-card">
+        <h4>PEDAL LOADS</h4>
+        <div class="pedal-bars-container">
+          <div class="pedal-col">
+            <div class="pedal-track"><div id="telemetry-throttle" class="pedal-fill throttle"></div></div>
+            <span class="pedal-label">THROTTLE</span>
+          </div>
+          <div class="pedal-col">
+            <div class="pedal-track"><div id="telemetry-brake" class="pedal-fill brake"></div></div>
+            <span class="pedal-label">BRAKE</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Steering Angle Meter -->
+      <div class="telemetry-card">
+        <h4>STEER ANGLE</h4>
+        <div class="steer-track">
+          <div id="telemetry-steer" class="steer-indicator"></div>
+        </div>
+      </div>
+
+      <!-- Tire Friction & Temp Status -->
+      <div class="telemetry-card">
+        <h4>TIRE SLIP / TEMP</h4>
+        <div class="tire-grid">
+          <div id="tire-fl" class="tire-node">FL</div>
+          <div id="tire-fr" class="tire-node">FR</div>
+          <div id="tire-rl" class="tire-node">RL</div>
+          <div id="tire-rr" class="tire-node">RR</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Garage Customizer Modal Panel -->
+  <div id="garage-panel" class="modal-overlay hidden">
+    <div class="modal-card glassmorphism">
+      <div class="modal-header">
+        <h2>GT GARAGE & CUSTOMIZER</h2>
+        <button id="garage-close-btn" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Body Paint Color Picker -->
+        <div class="custom-section">
+          <h3>BODY PAINT COLOR</h3>
+          <div class="color-swatches-grid">
+            <div class="color-swatch selected" data-color="dc2626" style="background: #dc2626;" title="Rosso Corsa Red"></div>
+            <div class="color-swatch" data-color="2563eb" style="background: #2563eb;" title="Monaco Blue"></div>
+            <div class="color-swatch" data-color="eab308" style="background: #eab308;" title="Acid Yellow"></div>
+            <div class="color-swatch" data-color="18181b" style="background: #18181b;" title="Matte Stealth Black"></div>
+            <div class="color-swatch" data-color="f8fafc" style="background: #f8fafc;" title="Pearl White"></div>
+            <div class="color-swatch" data-color="06b6d4" style="background: #06b6d4;" title="Electric Cyan"></div>
+          </div>
+        </div>
+
+        <!-- Paint Finish -->
+        <div class="custom-section">
+          <h3>PAINT FINISH</h3>
+          <div class="btn-group">
+            <button class="finish-btn active" data-finish="metallic">METALLIC</button>
+            <button class="finish-btn" data-finish="gloss">GLOSS</button>
+            <button class="finish-btn" data-finish="matte">MATTE</button>
+            <button class="finish-btn" data-finish="iridescent">IRIDESCENT SATIN</button>
+          </div>
+        </div>
+
+        <!-- Aerodynamic Rear Wing -->
+        <div class="custom-section">
+          <h3>AERODYNAMIC WING</h3>
+          <div class="btn-group">
+            <button class="wing-btn active" data-wing="gt3">GT3 HIGH DOWNFORCE</button>
+            <button class="wing-btn" data-wing="stealth">STEALTH SPOILER</button>
+            <button class="wing-btn" data-wing="hyper">HYPER EXTENDED</button>
+            <button class="wing-btn" data-wing="none">WING DELETE</button>
+          </div>
+        </div>
+
+        <!-- Engine Power Tuning Presets -->
+        <div class="custom-section">
+          <h3>ENGINE TUNING PRESET</h3>
+          <div class="btn-group">
+            <button class="tune-btn" data-hp="500">STOCK SPEC (500 HP)</button>
+            <button class="tune-btn active" data-hp="650">TRACK SPEC (650 HP)</button>
+            <button class="tune-btn" data-hp="850">HYPER GT (850 HP)</button>
+          </div>
+        </div>
+
+        <!-- Vehicle Performance Graph -->
+        <div class="custom-section">
+          <h3>PERFORMANCE STATS</h3>
+          <div class="stat-bar-group">
+            <div class="stat-row">
+              <span>HORSEPOWER</span>
+              <div class="stat-track"><div id="stat-power-bar" class="stat-fill" style="width: 76%;"></div></div>
+            </div>
+            <div class="stat-row">
+              <span>TOP SPEED</span>
+              <div class="stat-track"><div id="stat-speed-bar" class="stat-fill" style="width: 76%;"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Track Circuit Selection Modal -->
+  <div id="track-select-modal" class="modal-overlay hidden">
+    <div class="modal-card glassmorphism">
+      <div class="modal-header">
+        <h2>SELECT RACING CIRCUIT & ENVIRONMENT</h2>
+        <button id="track-select-close" class="close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Track List Cards -->
+        <div class="track-cards-grid">
+          <div class="track-card selected" data-track="apex">
+            <div class="track-preview apex-bg"></div>
+            <div class="track-info">
+              <h4>APEX INTERNATIONAL RACEWAY</h4>
+              <p>Monza-style curved asphalt circuit with red/white kerbs and speed traps.</p>
+            </div>
+          </div>
+          <div class="track-card" data-track="city">
+            <div class="track-preview city-bg"></div>
+            <div class="track-info">
+              <h4>NEO CITY NIGHT HIGHWAY</h4>
+              <p>Night street circuit with neon glow barriers, wet asphalt, and skyscraper views.</p>
+            </div>
+          </div>
+          <div class="track-card" data-track="desert">
+            <div class="track-preview desert-bg"></div>
+            <div class="track-info">
+              <h4>DESERT CANYON RUN</h4>
+              <p>High elevation dips, sweeping canyon turns, and dusty desert atmosphere.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Environment Settings (Time of Day & Weather) -->
+        <div class="custom-section">
+          <h3>TIME OF DAY</h3>
+          <div class="btn-group">
+            <button class="tod-btn active" data-tod="noon">NOON SUNLIGHT</button>
+            <button class="tod-btn" data-tod="sunset">GOLDEN SUNSET</button>
+            <button class="tod-btn" data-tod="midnight">MIDNIGHT</button>
+          </div>
+        </div>
+
+        <div class="custom-section">
+          <h3>WEATHER CONDITION</h3>
+          <div class="btn-group">
+            <button class="weather-btn active" data-weather="clear">CLEAR SKY</button>
+            <button class="weather-btn" data-weather="rainy">RAINY & WET ROAD</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Touch On-Screen Controls for Mobile / Touch Screen Devices -->
+  <div id="touch-controls" class="touch-overlay">
+    <div class="touch-left">
+      <button id="touch-left-btn" class="touch-btn">◀</button>
+      <button id="touch-right-btn" class="touch-btn">▶</button>
+    </div>
+    <div class="touch-right">
+      <button id="touch-brake-btn" class="touch-btn brake">BRAKE</button>
+      <button id="touch-accel-btn" class="touch-btn accel">GAS</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
