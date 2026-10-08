@@ -2,7 +2,11 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f172a">
   <title>Corsa GT - 3D GT Racing & Driving Simulator</title>
   <meta name="description" content="High-performance web-based 3D GT Racing & Driving Simulator with Three.js graphics, custom car physics, procedural audio engine, and telemetry HUD.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,15 +25,27 @@
       <h1>CORSA GT</h1>
       <p class="subtitle">3D GT RACING & DRIVING SIMULATOR</p>
       <button id="start-btn" class="btn-primary">
-        <span>ENGINE START (クリックして開始)</span>
+        <span>ENGINE START (タップ / クリックで開始)</span>
       </button>
-      <div class="control-hints">
+      <div class="control-hints key-hints">
         <span><kbd>W</kbd> / <kbd>↑</kbd> アクセル | <kbd>S</kbd> / <kbd>↓</kbd> ブレーキ・バック</span>
         <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> ステアリング | <kbd>SPACE</kbd> ハンドブレーキ</span>
         <span><kbd>M</kbd> AT/MT 切替 | <kbd>E</kbd> / <kbd>Q</kbd> シフトアップ/ダウン (MT)</span>
         <span><kbd>C</kbd> カメラ | <kbd>R</kbd> コース復帰 | <kbd>P</kbd> ポーズ | <kbd>G</kbd> ガレージ | <kbd>T</kbd> テレメトリ</span>
       </div>
+      <div class="control-hints touch-hints">
+        <span>📱 端末を<strong>横向き</strong>にしてプレイ</span>
+        <span>左親指: ステアリングパッドを左右にスライド</span>
+        <span>右親指: <strong>GAS</strong> アクセル / <strong>BRAKE</strong> ブレーキ・バック</span>
+        <span><strong>HB</strong> ハンドブレーキ | <strong>↺</strong> コース復帰</span>
+      </div>
     </div>
+  </div>
+
+  <!-- Shown on touch devices held upright -->
+  <div id="rotate-overlay">
+    <div class="rotate-icon">📱</div>
+    <p>端末を横向きにしてください</p>
   </div>
 
   <!-- Pause Overlay -->
@@ -314,13 +330,20 @@
 
   <!-- Touch On-Screen Controls for Mobile / Touch Screen Devices -->
   <div id="touch-controls" class="touch-overlay">
-    <div class="touch-left">
-      <button id="touch-left-btn" class="touch-btn">◀</button>
-      <button id="touch-right-btn" class="touch-btn">▶</button>
+    <div id="touch-steer" class="steer-pad">
+      <span class="steer-pad-arrow">◀</span>
+      <div id="touch-steer-knob" class="steer-pad-knob"></div>
+      <span class="steer-pad-arrow">▶</span>
     </div>
     <div class="touch-right">
-      <button id="touch-brake-btn" class="touch-btn brake">BRAKE</button>
-      <button id="touch-accel-btn" class="touch-btn accel">GAS</button>
+      <div class="touch-aux">
+        <button id="touch-recover-btn" class="touch-btn small" aria-label="コース復帰">↺</button>
+        <button id="touch-handbrake-btn" class="touch-btn small" aria-label="ハンドブレーキ">HB</button>
+      </div>
+      <div class="touch-pedals">
+        <button id="touch-brake-btn" class="touch-btn brake">BRAKE</button>
+        <button id="touch-accel-btn" class="touch-btn accel">GAS</button>
+      </div>
     </div>
   </div>
 

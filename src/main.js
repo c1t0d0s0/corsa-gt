@@ -10,6 +10,7 @@ import { HUD } from './ui/HUD.js';
 import { TelemetryUI } from './ui/Telemetry.js';
 import { GarageUI } from './ui/GarageUI.js';
 import { TrackSelectUI } from './ui/TrackSelectUI.js';
+import { TouchControls } from './ui/TouchControls.js';
 
 class CorsaApp {
   constructor() {
@@ -18,10 +19,11 @@ class CorsaApp {
     const params = new URLSearchParams(window.location.search);
 
     // 1. Core Engines
-    this.renderer = new RenderEngine(this.container);
     this.physics = new VehiclePhysics();
     this.audio = new AudioEngine();
     this.input = new InputManager();
+    this.touch = new TouchControls(this.input, { onRecover: () => this.recover() });
+    this.renderer = new RenderEngine(this.container, { mobile: this.touch.enabled });
     this.trackBuilder = new TrackBuilder(this.renderer.scene);
     this.carModel = new CarModel();
     this.effects = new Effects(this.renderer.scene);
@@ -72,9 +74,19 @@ class CorsaApp {
 
   start(withAudio = true) {
     if (withAudio) this.audio.unlock();
+    if (withAudio && this.touch.enabled) this.enterLandscape();
     this.started = true;
     const overlay = document.getElementById('audio-start-overlay');
     if (overlay) overlay.classList.add('hidden');
+  }
+
+  /** Phones: go fullscreen and pin landscape where the browser allows it (Android; iOS just rotates). */
+  enterLandscape() {
+    const root = document.documentElement;
+    if (!root.requestFullscreen) return;
+    root.requestFullscreen({ navigationUI: 'hide' })
+      .then(() => window.screen.orientation && window.screen.orientation.lock && window.screen.orientation.lock('landscape'))
+      .catch(() => {});
   }
 
   setCamera(mode) {
@@ -158,25 +170,6 @@ class CorsaApp {
     this.input.onGearUp = () => this.physics.shiftUp();
     this.input.onGearDown = () => this.physics.shiftDown();
 
-    // Touch controls: pointer events with capture so a finger sliding off still releases
-    const hold = (id, press, release) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      el.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        el.setPointerCapture(e.pointerId);
-        press();
-      });
-      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-        el.addEventListener(type, release);
-      }
-      el.addEventListener('contextmenu', (e) => e.preventDefault());
-    };
-    hold('touch-left-btn', () => { this.input.touchSteer = -1; }, () => { if (this.input.touchSteer < 0) this.input.touchSteer = 0; });
-    hold('touch-right-btn', () => { this.input.touchSteer = 1; }, () => { if (this.input.touchSteer > 0) this.input.touchSteer = 0; });
-    hold('touch-accel-btn', () => { this.input.touchThrottle = 1; }, () => { this.input.touchThrottle = 0; });
-    hold('touch-brake-btn', () => { this.input.touchBrake = 1; }, () => { this.input.touchBrake = 0; });
-
     document.addEventListener('visibilitychange', () => {
       this.lastTime = performance.now();
       this.input.releaseAll();
@@ -241,7 +234,8 @@ class CorsaApp {
 
   frame(dt) {
     const menuOpen = this.garageUI.visible || this.trackSelectUI.visible;
-    const running = this.started && !this.paused && !menuOpen;
+    const running = this.started && !this.paused && !menuOpen && !this.touch.portrait;
+    document.body.classList.toggle('menu-open', menuOpen); // hides the on-screen driving controls
 
     this.input.update(dt);
     if (running) this.physics.update(this.input, dt);

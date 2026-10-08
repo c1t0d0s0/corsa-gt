@@ -58,6 +58,7 @@ body, html {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   z-index: 999;
   display: flex;
   align-items: center;
@@ -537,6 +538,7 @@ kbd {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   z-index: 100;
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
@@ -689,47 +691,6 @@ kbd {
   margin-top: 2px;
 }
 
-/* Touch Controls */
-.touch-overlay {
-  position: absolute;
-  bottom: 20px;
-  left: 0;
-  width: 100%;
-  display: none;
-  justify-content: space-between;
-  padding: 0 24px;
-  z-index: 20;
-  pointer-events: none;
-}
-
-@media (max-width: 768px) {
-  .touch-overlay { display: flex; }
-}
-
-.touch-left, .touch-right {
-  display: flex;
-  gap: 12px;
-  pointer-events: auto;
-}
-
-.touch-btn {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: rgba(15, 23, 42, 0.8);
-  border: 2px solid var(--color-accent);
-  color: #ffffff;
-  font-family: var(--font-hud);
-  font-size: 1.2rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.touch-btn.accel { border-color: var(--color-green); color: var(--color-green); }
-.touch-btn.brake { border-color: var(--color-red); color: var(--color-red); }
-
 /* Transmission badge beside the rev counter */
 .trans-badge {
   margin-left: 8px;
@@ -745,11 +706,6 @@ kbd {
   touch-action: none;
 }
 
-.touch-btn {
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
 
 /* Garage: dock the panel to the side and keep the scene clear so the car stays visible */
 #garage-panel {
@@ -779,4 +735,281 @@ kbd {
     max-width: 100%;
     max-height: 46vh;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Touch devices                                                        */
+/* ------------------------------------------------------------------ */
+
+html, body {
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Panels that scroll still need vertical panning */
+.modal-card, .start-card {
+  touch-action: pan-y;
+}
+
+.touch-hints { display: none; }
+body.touch .touch-hints { display: flex; }
+body.touch .key-hints { display: none; }
+
+.touch-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 max(18px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+  z-index: 20;
+  pointer-events: none;
+}
+
+body.touch .touch-overlay { display: flex; }
+body.touch.menu-open .touch-overlay { display: none; }
+
+.steer-pad {
+  position: relative;
+  width: 210px;
+  height: 84px;
+  border-radius: 42px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.steer-pad.active { border-color: var(--color-accent); }
+
+.steer-pad-arrow {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 1.1rem;
+  pointer-events: none;
+}
+
+.steer-pad-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(56, 189, 248, 0.3);
+  border: 2px solid var(--color-accent);
+  box-shadow: 0 0 14px var(--color-accent-glow);
+  pointer-events: none;
+}
+
+.touch-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.touch-aux, .touch-pedals {
+  display: flex;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-btn {
+  width: 84px;
+  height: 84px;
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px solid var(--color-accent);
+  color: #ffffff;
+  font-family: var(--font-hud);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.touch-btn.small {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border-color: rgba(255, 255, 255, 0.35);
+  font-size: 0.75rem;
+}
+
+.touch-btn.accel { border-color: var(--color-green); color: var(--color-green); }
+.touch-btn.brake { border-color: var(--color-red); color: var(--color-red); }
+.touch-btn.active { background: rgba(255, 255, 255, 0.28); transform: scale(0.95); }
+.touch-btn.accel.active { background: rgba(34, 197, 94, 0.4); }
+.touch-btn.brake.active { background: rgba(220, 38, 38, 0.4); }
+
+/* Hovering does nothing useful under a finger and tends to stick */
+@media (hover: none) {
+  .btn-icon:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15); }
+  .btn-primary:hover { transform: none; }
+}
+
+/* Ask for landscape; sits under the start card so the first tap can still go fullscreen */
+#rotate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(15, 23, 42, 0.96);
+  font-family: var(--font-hud);
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.rotate-icon {
+  font-size: 4rem;
+  animation: rotate-hint 1.8s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+  0%, 20% { transform: rotate(0deg); }
+  60%, 100% { transform: rotate(-90deg); }
+}
+
+@media (orientation: portrait) {
+  body.touch #rotate-overlay { display: flex; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Short viewports: phones in landscape                                 */
+/* ------------------------------------------------------------------ */
+@media (max-height: 520px) {
+  .top-nav {
+    top: max(6px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right));
+    height: 40px;
+    padding: 0 10px;
+  }
+
+  .brand { gap: 8px; }
+  .brand-title { font-size: 0.95rem; letter-spacing: 1px; }
+  .badge { font-size: 0.55rem; padding: 2px 6px; }
+  .nav-actions { gap: 6px; }
+
+  /* Icons only: the labels (plain text and spans alike) collapse to nothing */
+  .btn-icon {
+    font-size: 0;
+    gap: 0;
+    padding: 0;
+    width: 36px;
+    height: 30px;
+    justify-content: center;
+  }
+  .btn-icon .icon { font-size: 1rem; }
+
+  .hud-lap-box {
+    top: calc(max(6px, env(safe-area-inset-top)) + 46px);
+    left: max(8px, env(safe-area-inset-left));
+    width: 148px;
+    padding: 7px 10px;
+    gap: 2px;
+  }
+  .lap-header { font-size: 0.6rem; }
+  .digital-time { font-size: 0.8rem; }
+  .lap-time-row .label { font-size: 0.55rem; }
+
+  .hud-minimap-box {
+    top: calc(max(6px, env(safe-area-inset-top)) + 46px);
+    right: max(8px, env(safe-area-inset-right));
+    width: 104px;
+    height: 104px;
+    padding: 4px;
+  }
+  #hud-minimap-canvas { width: 96px; height: 96px; }
+
+  .hud-center-cluster {
+    bottom: max(6px, env(safe-area-inset-bottom));
+    gap: 4px;
+  }
+  .shift-lights-row { gap: 5px; padding: 3px 8px; }
+  .shift-light { width: 9px; height: 9px; }
+  .gauge-card { width: 168px; padding: 6px 14px 8px; gap: 1px; }
+  .gear-display { font-size: 1.7rem; }
+  #hud-speed-val { font-size: 1.5rem; }
+  .speed-display .unit { font-size: 0.6rem; }
+  .rpm-container { height: 5px; margin-top: 3px; }
+  .rpm-numeric { display: none; }
+
+  .steer-pad { width: 190px; height: 76px; border-radius: 38px; }
+  .steer-pad-knob { width: 58px; height: 58px; }
+  .touch-btn { width: 76px; height: 76px; }
+  .touch-btn.small { width: 40px; height: 40px; }
+  .touch-right { gap: 8px; }
+
+  .start-card {
+    padding: 14px 26px;
+    max-width: 560px;
+    max-height: 94dvh;
+    overflow-y: auto;
+  }
+  .logo-icon { display: none; }
+  .start-card h1 { font-size: 1.7rem; }
+  .start-card .subtitle { font-size: 0.65rem; margin-bottom: 10px; }
+  .btn-primary { padding: 11px 18px; font-size: 0.9rem; }
+  .control-hints { margin-top: 10px; gap: 4px; font-size: 0.7rem; }
+
+  .modal-card {
+    width: 620px;
+    max-width: 94%;
+    max-height: 94dvh;
+    padding: 12px 16px;
+  }
+  .modal-header { padding-bottom: 6px; margin-bottom: 8px; }
+  .modal-header h2 { font-size: 0.85rem; }
+  .custom-section { margin-bottom: 10px; }
+  .custom-section h3 { margin-bottom: 5px; }
+  .track-cards-grid { flex-direction: row; gap: 8px; margin-bottom: 10px; }
+  .track-card { flex: 1; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px; }
+  .track-preview { width: 100%; height: 26px; }
+  .track-info p { display: none; }
+
+  #garage-panel {
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: calc(max(6px, env(safe-area-inset-top)) + 46px) max(8px, env(safe-area-inset-right)) 0 0;
+  }
+  #garage-panel .modal-card {
+    width: 300px;
+    max-width: 300px;
+    max-height: calc(100dvh - max(6px, env(safe-area-inset-top)) - 54px);
+  }
+
+  /* Telemetry moves up to the middle, clear of both thumbs */
+  #telemetry-panel {
+    top: calc(max(6px, env(safe-area-inset-top)) + 46px);
+    bottom: auto;
+    left: 50%;
+    width: 320px;
+    padding: 10px;
+    transform: translateX(-50%) scale(0.62);
+    transform-origin: top center;
+  }
+  #telemetry-panel.hidden { transform: translateX(-50%) scale(0.62) translateY(12px); }
+}
+
+/* Narrow landscape phones: the brand gives way to the buttons */
+@media (max-height: 520px) and (max-width: 700px) {
+  .badge { display: none; }
 }

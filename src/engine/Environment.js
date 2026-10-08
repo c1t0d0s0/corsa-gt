@@ -110,7 +110,7 @@ const cloudFragment = /* glsl */ `
  * Sky, lighting, fog and image-based lighting for the scene.
  */
 export class Environment {
-  constructor(scene, renderer) {
+  constructor(scene, renderer, { shadowMapSize = 2048 } = {}) {
     this.scene = scene;
     this.renderer = renderer;
     this.pmrem = new THREE.PMREMGenerator(renderer);
@@ -178,7 +178,7 @@ export class Environment {
     this.sunDir = new THREE.Vector3(0.5, 0.8, 0.3).normalize();
     this.sunLight = new THREE.DirectionalLight(0xffffff, 3);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     const cam = this.sunLight.shadow.camera;
     cam.near = 1;
     cam.far = 400;

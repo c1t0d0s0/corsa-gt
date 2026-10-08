@@ -41,9 +41,12 @@ export class InputManager {
     this.brake = 0;
     this.handbrake = 0;
 
+    // Written by TouchControls
     this.touchSteer = 0;
+    this.touchSteerActive = false;
     this.touchThrottle = 0;
     this.touchBrake = 0;
+    this.touchHandbrake = 0;
 
     this.onCameraPress = null;
     this.onResetPress = null;
@@ -82,15 +85,15 @@ export class InputManager {
 
   releaseAll() {
     Object.keys(this.keys).forEach((k) => { this.keys[k] = false; });
-    this.touchSteer = this.touchThrottle = this.touchBrake = 0;
+    this.touchSteer = this.touchThrottle = this.touchBrake = this.touchHandbrake = 0;
+    this.touchSteerActive = false;
   }
 
   update(dt = 1 / 60) {
     let steerTarget = (this.keys.steerRight ? 1 : 0) - (this.keys.steerLeft ? 1 : 0);
-    if (this.touchSteer !== 0) steerTarget = this.touchSteer;
     let throttleTarget = Math.max(this.keys.throttle ? 1 : 0, this.touchThrottle);
     let brakeTarget = Math.max(this.keys.brake ? 1 : 0, this.touchBrake);
-    let handbrake = this.keys.handbrake ? 1 : 0;
+    let handbrake = this.keys.handbrake || this.touchHandbrake ? 1 : 0;
     let analog = false;
 
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -118,6 +121,9 @@ export class InputManager {
 
     if (analog) {
       this.steering = steerTarget;
+    } else if (this.touchSteerActive) {
+      // The steering pad is analog; just take the edge off finger jitter
+      this.steering = approach(this.steering, this.touchSteer, 12, dt);
     } else {
       // Turn in at a steady rate, unwind faster, and snap through centre when reversing lock
       const reversing = steerTarget !== 0 && Math.sign(steerTarget) !== Math.sign(this.steering) && this.steering !== 0;

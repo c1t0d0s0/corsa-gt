@@ -1,77 +1,20 @@
 // Drives the real app in headless Chromium over the DevTools protocol and
 // checks that the interactive paths work (menus, cameras, driving, tracks).
 // Usage: start `npm run dev`, then `node scripts/browser-check.mjs [url] [screenshotDir]`
-import { spawn } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { openBrowser, reporter } from './cdp.mjs';
 
 const url = process.argv[2] || 'http://localhost:3000/';
-const shotDir = process.argv[3] || null;
-const port = 9333;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const chrome = spawn(process.env.CHROME || 'chromium', [
-  '--headless=new', '--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
-  '--ignore-gpu-blocklist', '--window-size=1280,720', '--hide-scrollbars',
-  `--remote-debugging-port=${port}`, 'about:blank'
-], { stdio: 'ignore' });
-
-let failures = 0;
-const problems = [];
-const check = (name, ok, detail = '') => {
-  console.log(`${ok ? '  ok  ' : '  FAIL'} ${name}${detail ? ` (${detail})` : ''}`);
-  if (!ok) failures++;
-};
+const report = reporter();
+const { check } = report;
+let browser;
 
 try {
-  let targets;
-  for (let i = 0; i < 40 && !targets; i++) {
-    await sleep(500);
-    targets = await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json()).catch(() => null);
-  }
-  const page = targets.find((t) => t.type === 'page');
-  const ws = new WebSocket(page.webSocketDebuggerUrl);
-  await new Promise((r) => ws.addEventListener('open', r));
-  let id = 0;
-  const pending = new Map();
-  ws.addEventListener('message', (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); }
-    if (msg.method === 'Runtime.exceptionThrown') problems.push(msg.params.exceptionDetails.exception?.description || msg.params.exceptionDetails.text);
-    if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {
-      problems.push(msg.params.args.map((a) => a.description || a.value).join(' '));
-    }
-  });
-  const send = (method, params = {}) => new Promise((resolve) => {
-    pending.set(++id, resolve);
-    ws.send(JSON.stringify({ id, method, params }));
-  });
-  const run = async (expression) => {
-    const res = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (res.result.exceptionDetails) throw new Error(res.result.exceptionDetails.exception?.description || 'eval failed');
-    return res.result.result.value;
-  };
+  browser = await openBrowser({ shotDir: process.argv[3] || null });
+  const { send, run, waitFrames, until, shot, problems } = browser;
   const key = (type, code) => run(`window.dispatchEvent(new KeyboardEvent('${type}', { code: '${code}', bubbles: true }))`);
   const tap = async (code) => { await key('keydown', code); await key('keyup', code); };
   const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
-  const frames = () => run('corsa.renderer.renderer.info.render.frame');
-  const waitFrames = async (n = 3) => {
-    const start = await frames();
-    for (let i = 0; i < 300; i++) { await sleep(100); if ((await frames()) >= start + n) return true; }
-    return false;
-  };
-  const until = async (expression, timeout = 90000) => {
-    const t0 = Date.now();
-    while (Date.now() - t0 < timeout) { if (await run(expression)) return true; await sleep(200); }
-    return false;
-  };
-  const shot = async (name) => {
-    if (!shotDir) return;
-    const res = await send('Page.captureScreenshot', { format: 'png' });
-    writeFileSync(`${shotDir}/${name}.png`, Buffer.from(res.result.data, 'base64'));
-  };
 
-  await send('Runtime.enable');
-  await send('Page.enable');
   await send('Page.navigate', { url });
   check('app boots', await until('!!(window.corsa && corsa.physics.track)', 60000));
   check('renders frames before start', await waitFrames());
@@ -150,12 +93,11 @@ try {
   await shot('final');
 
   check('no console errors or exceptions', problems.length === 0, problems.slice(0, 3).join(' | '));
-  ws.close();
 } catch (err) {
   console.error(err);
-  failures++;
+  report.fail();
 } finally {
-  chrome.kill();
+  if (browser) browser.close();
 }
-console.log(failures ? `\n${failures} check(s) failed` : '\nAll browser checks passed');
-process.exit(failures ? 1 : 0);
+console.log(report.failures ? `\n${report.failures} check(s) failed` : '\nAll browser checks passed');
+process.exit(report.failures ? 1 : 0);

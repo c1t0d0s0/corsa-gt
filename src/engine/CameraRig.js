@@ -146,7 +146,8 @@ export class CameraRig {
     let shiftX = 0;
     let shiftY = this.mode === 'chase' ? Math.round(h * 0.11) : 0;
     if (this.mode === 'orbit' && this.panelOpen) {
-      if (w > 900) shiftX = Math.round(w * 0.16);
+      // The panel docks to the right on desktops and landscape phones, to the bottom otherwise
+      if (w > 900 || h <= 520) shiftX = Math.round(w * 0.16);
       else shiftY = Math.round(h * 0.22);
     }
     const key = `${w}x${h}:${shiftX}:${shiftY}`;

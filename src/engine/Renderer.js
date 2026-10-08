@@ -43,8 +43,10 @@ const PIXEL_RATIO_STEPS = [2, 1.5, 1.25, 1, 0.8];
  * Owns the WebGL renderer, scene, post-processing chain, sky/lighting and camera rig.
  */
 export class RenderEngine {
-  constructor(containerElement) {
+  /** @param options.mobile  start from lighter settings suited to phone GPUs */
+  constructor(containerElement, { mobile = false } = {}) {
     this.container = containerElement;
+    this.mobile = mobile;
     this.scene = new THREE.Scene();
 
     this.camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.15, 6000);
@@ -57,17 +59,19 @@ export class RenderEngine {
     this.container.appendChild(this.renderer.domElement);
 
     // Start at the best pixel ratio the display wants; drop a step if the GPU can't keep up
-    const device = Math.min(window.devicePixelRatio || 1, 2);
+    const device = Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
     this.ratioIndex = PIXEL_RATIO_STEPS.findIndex((r) => r <= device);
     this.frameTimeAvg = 1 / 60;
     this.slowTime = 0;
 
-    this.environment = new Environment(this.scene, this.renderer);
+    this.qualityStage = 0;
+
+    this.environment = new Environment(this.scene, this.renderer, { shadowMapSize: mobile ? 1024 : 2048 });
     this.cameraRig = new CameraRig(this.camera, this.renderer.domElement);
 
     // Post-processing: MSAA HDR target → bloom → grade → tone map
     const size = new THREE.Vector2(window.innerWidth, window.innerHeight);
-    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: mobile ? 2 : 4 });
     this.composer = new EffectComposer(this.renderer, target);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloomPass = new UnrealBloomPass(size, 0.25, 0.6, 1.5);
@@ -78,6 +82,8 @@ export class RenderEngine {
 
     this.onWindowResize();
     window.addEventListener('resize', () => this.onWindowResize());
+    // Mobile browsers settle their viewport a beat after the rotation event
+    window.addEventListener('orientationchange', () => setTimeout(() => this.onWindowResize(), 250));
   }
 
   get cameraMode() {
@@ -120,11 +126,19 @@ export class RenderEngine {
     if (dt <= 0 || dt > 0.25) return;
     this.frameTimeAvg += (dt - this.frameTimeAvg) * 0.05;
     this.slowTime = this.frameTimeAvg > 1 / 42 ? this.slowTime + dt : 0;
-    if (this.slowTime > 2.5 && this.ratioIndex < PIXEL_RATIO_STEPS.length - 1) {
+    if (this.slowTime <= 2.5) return;
+    this.slowTime = 0;
+    this.frameTimeAvg = 1 / 60;
+    if (this.ratioIndex < PIXEL_RATIO_STEPS.length - 1) {
       this.ratioIndex++;
-      this.slowTime = 0;
-      this.frameTimeAvg = 1 / 60;
       this.onWindowResize();
+    } else if (this.qualityStage === 0) {
+      // Resolution is already at the floor: shed bloom, then shadows
+      this.qualityStage = 1;
+      this.bloomPass.enabled = false;
+    } else if (this.qualityStage === 1) {
+      this.qualityStage = 2;
+      this.environment.sunLight.castShadow = false;
     }
   }
 
@@ -132,6 +146,7 @@ export class RenderEngine {
     const w = window.innerWidth;
     const h = window.innerHeight;
     const ratio = Math.min(PIXEL_RATIO_STEPS[this.ratioIndex], window.devicePixelRatio || 1);
+    this.cameraRig.snap(); // a rotation changes the framing; don't ease into it
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(ratio);
