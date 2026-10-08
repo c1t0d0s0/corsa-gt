@@ -59,8 +59,14 @@ class CorsaApp {
     this.garageUI.applyAll();
     this.physics.autopilot = params.get('autopilot') === '1';
     this.loadTrack(params.get('track') || 'apex', params.get('tod'));
-    if (params.get('cam')) this.setCamera(params.get('cam'));
-    if (params.get('autostart') === '1') this.start(false);
+    this.startCamera = params.get('cam') || 'chase';
+    if (params.get('autostart') === '1') {
+      this.start(false);
+    } else {
+      // Title screen: circle the car until the driver hits the ignition
+      this.renderer.cameraRig.titleView = true;
+      this.setCamera('orbit');
+    }
 
     // Fast-forward the simulation, handy for capturing a specific moment
     const skip = Math.min(600, parseFloat(params.get('t')) || 0);
@@ -74,9 +80,13 @@ class CorsaApp {
   }
 
   start(withAudio = true) {
+    if (this.started) return;
     if (withAudio) this.audio.unlock();
     if (withAudio && this.touch.enabled) this.enterLandscape();
     this.started = true;
+    this.renderer.cameraRig.titleView = false;
+    this.setCamera(this.startCamera);
+    document.body.classList.remove('pre-start');
     const overlay = document.getElementById('audio-start-overlay');
     if (overlay) overlay.classList.add('hidden');
   }
@@ -134,6 +144,7 @@ class CorsaApp {
   setupEvents() {
     const startOverlay = document.getElementById('audio-start-overlay');
     if (startOverlay) startOverlay.addEventListener('click', () => this.start());
+    window.addEventListener('keydown', (e) => { if (!this.started && e.code === 'Enter') this.start(); });
 
     const on = (id, handler) => {
       const el = document.getElementById(id);

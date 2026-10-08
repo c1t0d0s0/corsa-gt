@@ -11,35 +11,46 @@
   <meta name="description" content="High-performance web-based 3D GT Racing & Driving Simulator with Three.js graphics, custom car physics, procedural audio engine, and telemetry HUD.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;1,600;1,800&family=Inter:wght@300;400;600;700&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css">
 </head>
-<body>
+<body class="pre-start">
   <!-- 3D WebGL Canvas Container -->
   <div id="canvas-container"></div>
 
-  <!-- Audio Unlock / Start Overlay -->
-  <div id="audio-start-overlay" class="overlay-fullscreen">
-    <div class="start-card glassmorphism">
-      <div class="logo-icon">🏎️</div>
-      <h1>CORSA GT</h1>
-      <p class="subtitle">3D GT RACING & DRIVING SIMULATOR</p>
-      <button id="start-btn" class="btn-primary">
-        <span data-i18n="start.button">ENGINE START (tap / click)</span>
+  <!-- Title screen. The live scene shows through; the first tap also unlocks audio. -->
+  <div id="audio-start-overlay" class="overlay-fullscreen title-screen">
+    <div class="title-main">
+      <header class="title-head">
+        <h1 class="title-wordmark">Corsa GT</h1>
+        <p class="title-tagline" data-i18n="title.tagline"></p>
+      </header>
+      <button id="start-btn" class="ignition">
+        <span class="ignition-led" aria-hidden="true"></span>
+        <span class="ignition-label" data-i18n="start.button">ENGINE START</span>
       </button>
-      <div class="control-hints key-hints">
-        <span data-i18n="hint.pedals"></span>
-        <span data-i18n="hint.steer"></span>
-        <span data-i18n="hint.gears"></span>
-        <span data-i18n="hint.misc"></span>
-      </div>
-      <div class="control-hints touch-hints">
-        <span data-i18n="touch.landscape"></span>
-        <span data-i18n="touch.steer"></span>
-        <span data-i18n="touch.pedals"></span>
-        <span data-i18n="touch.aux"></span>
-      </div>
     </div>
+    <dl class="legend key-hints">
+      <div><dt><kbd>W</kbd><kbd>↑</kbd></dt><dd data-i18n="key.throttle"></dd></div>
+      <div><dt><kbd>S</kbd><kbd>↓</kbd></dt><dd data-i18n="key.brake"></dd></div>
+      <div><dt><kbd>A</kbd><kbd>D</kbd><kbd>←</kbd><kbd>→</kbd></dt><dd data-i18n="key.steer"></dd></div>
+      <div><dt><kbd>Space</kbd></dt><dd data-i18n="key.handbrake"></dd></div>
+      <div><dt><kbd>M</kbd></dt><dd data-i18n="key.gearbox"></dd></div>
+      <div><dt><kbd>E</kbd><kbd>Q</kbd></dt><dd data-i18n="key.shift"></dd></div>
+      <div><dt><kbd>C</kbd></dt><dd data-i18n="key.camera"></dd></div>
+      <div><dt><kbd>R</kbd></dt><dd data-i18n="key.recover"></dd></div>
+      <div><dt><kbd>P</kbd></dt><dd data-i18n="key.pause"></dd></div>
+      <div><dt><kbd>G</kbd></dt><dd data-i18n="key.garage"></dd></div>
+      <div><dt><kbd>T</kbd></dt><dd data-i18n="key.telemetry"></dd></div>
+    </dl>
+    <dl class="legend touch-hints">
+      <div><dt><kbd>◀ ▶</kbd></dt><dd data-i18n="touch.steer"></dd></div>
+      <div><dt><kbd>GAS</kbd></dt><dd data-i18n="key.throttle"></dd></div>
+      <div><dt><kbd>BRAKE</kbd></dt><dd data-i18n="key.brake"></dd></div>
+      <div><dt><kbd>HB</kbd></dt><dd data-i18n="key.handbrake"></dd></div>
+      <div><dt><kbd>↺</kbd></dt><dd data-i18n="key.recover"></dd></div>
+      <div><dt>📱</dt><dd data-i18n="touch.landscape"></dd></div>
+    </dl>
   </div>
 
   <!-- Shown on touch devices held upright -->

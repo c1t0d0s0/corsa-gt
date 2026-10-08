@@ -9,6 +9,8 @@
 :root {
   --font-hud: 'Orbitron', -apple-system, sans-serif;
   --font-body: 'Inter', -apple-system, sans-serif;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', 'Helvetica Neue', sans-serif;
+  --color-rosso: #e2162c;
   
   --color-bg: #0f172a;
   --color-accent: #38bdf8;
@@ -74,74 +76,218 @@ body, html {
   pointer-events: none;
 }
 
+/* Pause card */
 .start-card {
-  padding: 40px 50px;
+  padding: 32px 56px;
   text-align: center;
   max-width: 520px;
   width: 90%;
-  border-radius: 20px;
-}
-
-.logo-icon {
-  font-size: 3rem;
-  margin-bottom: 12px;
+  border-radius: 14px;
 }
 
 .start-card h1 {
-  font-family: var(--font-hud);
-  font-size: 2.8rem;
-  font-weight: 900;
-  letter-spacing: 4px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 3.4rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
   color: #ffffff;
-  text-shadow: 0 0 20px var(--color-accent-glow);
 }
 
 .start-card .subtitle {
-  font-family: var(--font-hud);
-  font-size: 0.85rem;
-  letter-spacing: 3px;
-  color: var(--color-accent);
-  margin-bottom: 28px;
-}
-
-.btn-primary {
-  width: 100%;
-  padding: 16px 24px;
-  font-family: var(--font-hud);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: #0f172a;
-  background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.4);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 28px rgba(56, 189, 248, 0.6);
-}
-
-.control-hints {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: #94a3b8;
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #aab3bf;
 }
 
 kbd {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  display: inline-block;
+  min-width: 1.7em;
   padding: 2px 6px;
-  font-family: var(--font-hud);
-  font-size: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 5px;
+  font-family: var(--font-body);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
   color: #ffffff;
+}
+
+/* ------------------------------------------------------------------ */
+/* Title screen                                                         */
+/* The car itself is the picture: the scene stays visible behind a      */
+/* scrim that is darkest where the type sits.                           */
+/* ------------------------------------------------------------------ */
+.title-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* without this, long legend rows widen the page */
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: clamp(18px, 4vh, 40px);
+  padding: clamp(22px, 5vw, 72px);
+  padding-left: max(clamp(22px, 5vw, 72px), env(safe-area-inset-left));
+  padding-right: max(clamp(22px, 5vw, 72px), env(safe-area-inset-right));
+  padding-bottom: max(clamp(18px, 4vh, 44px), env(safe-area-inset-bottom));
+  background:
+    linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.3) 34%, transparent 58%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.22) 48%, transparent 72%);
+  backdrop-filter: none;
+  transition: opacity 0.7s ease, visibility 0.7s ease;
+}
+
+.title-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: clamp(20px, 4.5vh, 44px);
+  min-height: 0;
+}
+
+.title-wordmark {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(4.4rem, 11.5vw, 10.5rem);
+  line-height: 0.82;
+  letter-spacing: -0.012em;
+  text-transform: uppercase;
+  color: #ffffff;
+  text-shadow: 0 2px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* Livery stripe in rosso corsa, raked to match the italic */
+.title-wordmark::after {
+  content: '';
+  display: block;
+  width: 0.92em;
+  height: 0.07em;
+  margin-top: 0.14em;
+  background: var(--color-rosso);
+  transform: skewX(-14deg);
+  transform-origin: bottom left;
+}
+
+.title-tagline {
+  margin-top: clamp(10px, 1.6vh, 18px);
+  font-size: clamp(0.9rem, 1.25vw, 1.1rem);
+  color: #d5dbe3;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
+}
+
+/* Start button modelled on a car's ignition push button */
+.ignition {
+  position: relative;
+  flex: none;
+  width: clamp(104px, 15vh, 136px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8%;
+  color: #ffffff;
+  /* knurled bezel, then the dished button face */
+  background:
+    radial-gradient(circle at 50% 34%, #3a3f47 0%, #17191d 62%, #0c0d10 100%) padding-box,
+    conic-gradient(from 210deg, #f2f4f7, #6d737c 18%, #e3e6ea 36%, #4b5058 54%, #dfe2e6 72%, #6d737c 88%, #f2f4f7) border-box;
+  border: 5px solid transparent;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 2px 5px rgba(255, 255, 255, 0.14);
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+
+.ignition-led {
+  width: 26%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-rosso);
+  box-shadow: 0 0 10px 1px rgba(226, 22, 44, 0.9);
+  animation: ignition-ready 2.4s ease-in-out infinite;
+}
+
+.ignition-label {
+  width: 70%;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(0.95rem, 2.3vh, 1.2rem);
+  line-height: 1.02;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+@keyframes ignition-ready {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.ignition:hover {
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 0 5px rgba(226, 22, 44, 0.3), 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 2px 5px rgba(255, 255, 255, 0.14);
+}
+
+.ignition:active { transform: scale(0.955); }
+
+.ignition:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 5px;
+}
+
+/* Controls reference: key caps on the left of each entry, what they do on the right */
+.legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 9px 28px;
+  max-width: 1040px;
+  padding-top: clamp(12px, 2vh, 20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.86rem;
+  color: #c9d0d9;
+}
+
+.legend > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.legend dt {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.legend dd {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.touch-hints { display: none; }
+body.touch .touch-hints { display: grid; }
+body.touch .key-hints { display: none; }
+
+/* The HUD waits for the engine to start */
+.top-nav, #hud-overlay, .touch-overlay {
+  transition: opacity 0.6s ease 0.15s;
+}
+
+body.pre-start .top-nav,
+body.pre-start #hud-overlay,
+body.pre-start .touch-overlay,
+body.pre-start #telemetry-panel {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ignition-led { animation: none; }
+  .title-screen, .top-nav, #hud-overlay, .touch-overlay { transition-duration: 0.01s; transition-delay: 0s; }
 }
 
 /* Top Action Navigation Bar */
@@ -754,10 +900,6 @@ html, body {
   touch-action: pan-y;
 }
 
-.touch-hints { display: none; }
-body.touch .touch-hints { display: flex; }
-body.touch .key-hints { display: none; }
-
 .touch-overlay {
   position: absolute;
   left: 0;
@@ -858,7 +1000,6 @@ body.touch.menu-open .touch-overlay { display: none; }
 /* Hovering does nothing useful under a finger and tends to stick */
 @media (hover: none) {
   .btn-icon:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15); }
-  .btn-primary:hover { transform: none; }
 }
 
 /* Ask for landscape; sits under the start card so the first tap can still go fullscreen */
@@ -889,6 +1030,8 @@ body.touch.menu-open .touch-overlay { display: none; }
 
 @media (orientation: portrait) {
   body.touch #rotate-overlay { display: flex; }
+  /* Not before the first tap: the title screen is showing, and that tap may rotate the screen for us */
+  body.touch.pre-start #rotate-overlay { display: none; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -958,17 +1101,17 @@ body.touch.menu-open .touch-overlay { display: none; }
   .touch-btn.small { width: 40px; height: 40px; }
   .touch-right { gap: 8px; }
 
-  .start-card {
-    padding: 14px 26px;
-    max-width: 560px;
-    max-height: 94dvh;
-    overflow-y: auto;
-  }
-  .logo-icon { display: none; }
-  .start-card h1 { font-size: 1.7rem; }
-  .start-card .subtitle { font-size: 0.65rem; margin-bottom: 10px; }
-  .btn-primary { padding: 11px 18px; font-size: 0.9rem; }
-  .control-hints { margin-top: 10px; gap: 4px; font-size: 0.7rem; }
+  .start-card { padding: 18px 36px; }
+  .start-card h1 { font-size: 2.4rem; }
+
+  /* Title: wordmark and ignition side by side, legend tightened to a few short rows */
+  .title-screen { gap: 12px; padding-top: 16px; padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .title-main { flex-direction: row; align-items: flex-end; justify-content: space-between; gap: 20px; }
+  .title-wordmark { font-size: clamp(3.4rem, 11.5vw, 6rem); }
+  .title-tagline { margin-top: 8px; font-size: 0.8rem; }
+  .ignition { width: 96px; margin-right: clamp(0px, 4vw, 40px); }
+  .ignition-label { font-size: 0.86rem; }
+  .legend { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 5px 16px; padding-top: 9px; font-size: 0.72rem; }
 
   .modal-card {
     width: 620px;
@@ -1017,4 +1160,10 @@ body.touch.menu-open .touch-overlay { display: none; }
 /* Translated text is filled in by script; keep it out of sight until then so the wrong language never flashes */
 html:not([data-i18n-ready]) [data-i18n] {
   visibility: hidden;
+}
+
+/* Upright phone, before the first tap: stack everything and let the wordmark fill the width */
+@media (orientation: portrait) and (max-width: 600px) {
+  .title-wordmark { font-size: 25vw; }
+  .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; font-size: 0.78rem; }
 }

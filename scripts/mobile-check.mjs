@@ -47,7 +47,7 @@ try {
   check('app boots', await until('!!(window.corsa && corsa.physics.track)', 60000));
   check('touch device detected, mobile render settings', await run("document.body.classList.contains('touch') && corsa.renderer.mobile"));
   check('touch hints replace keyboard hints', await run("getComputedStyle(document.querySelector('.touch-hints')).display !== 'none' && getComputedStyle(document.querySelector('.key-hints')).display === 'none'"));
-  check('start card fits the screen', await run("document.querySelector('#audio-start-overlay .start-card').getBoundingClientRect().bottom <= innerHeight"));
+  check('title screen fits without scrolling or clipping', await run("['.title-wordmark', '#start-btn', '.touch-hints'].every((sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth; })"));
   await shot('m-start');
 
   console.log('landscape 844x390');

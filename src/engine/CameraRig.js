@@ -21,6 +21,7 @@ export class CameraRig {
     this.needsSnap = true;
     this.viewShift = '';
     this.panelOpen = false; // a side panel covers part of the view (garage)
+    this.titleView = false; // slow, low showroom orbit behind the title screen
 
     this.orbitAngle = 0.6;
     this.orbitHeight = 1.7;
@@ -128,11 +129,13 @@ export class CameraRig {
       cam.lookAt(this._look);
       fov += 8 + clamp(speed / 80, 0, 1) * 8;
     } else {
-      if (!this.dragging) this.orbitAngle += 0.25 * dt;
+      const title = this.titleView;
+      if (!this.dragging) this.orbitAngle += (title ? 0.11 : 0.25) * dt;
+      const distance = title ? 7.6 : this.orbitDistance;
       cam.position.set(
-        pos.x + Math.sin(this.orbitAngle) * this.orbitDistance,
-        pos.y + this.orbitHeight,
-        pos.z + Math.cos(this.orbitAngle) * this.orbitDistance
+        pos.x + Math.sin(this.orbitAngle) * distance,
+        pos.y + (title ? 1.05 : this.orbitHeight),
+        pos.z + Math.cos(this.orbitAngle) * distance
       );
       cam.up.set(0, 1, 0);
       this._look.set(pos.x, pos.y + 0.65, pos.z);
@@ -145,7 +148,11 @@ export class CameraRig {
     const h = window.innerHeight;
     let shiftX = 0;
     let shiftY = this.mode === 'chase' ? Math.round(h * 0.11) : 0;
-    if (this.mode === 'orbit' && this.panelOpen) {
+    if (this.mode === 'orbit' && this.titleView) {
+      // Keep the car clear of the wordmark: to the right in landscape, up the screen in portrait
+      if (w > h) shiftX = -Math.round(w * 0.2);
+      shiftY = Math.round(h * (w > h ? 0.06 : 0.16));
+    } else if (this.mode === 'orbit' && this.panelOpen) {
       // The panel docks to the right on desktops and landscape phones, to the bottom otherwise
       if (w > 900 || h <= 520) shiftX = Math.round(w * 0.16);
       else shiftY = Math.round(h * 0.22);
