@@ -166,7 +166,9 @@ export function buildScenery(path, def, group) {
     const trunks = [];
     const broadleaf = [];
     const pines = [];
-    for (let i = 0; i < 900; i++) {
+    // Keep the forest as dense on a long circuit as on a short one
+    const treeCount = Math.min(2400, Math.round(path.length * 0.45));
+    for (let i = 0; i < treeCount; i++) {
       const spot = spotBesideTrack(5, 260, 5);
       if (!spot) continue;
       const y = heightAt(spot.x, spot.z) - 0.2;

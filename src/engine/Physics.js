@@ -235,7 +235,7 @@ export class VehiclePhysics {
     const t = this.track;
     const aLat = mu * G * latFactor;
     const aBrk = mu * G * brakeFactor;
-    const look = Math.min(320, (this.vx * this.vx) / (2 * aBrk) + 25);
+    const look = Math.min(700, (this.vx * this.vx) / (2 * aBrk) + 25); // far enough to stop from top speed
     const steps = Math.ceil(look / (t.ds * 3));
     let v2min = Infinity;
     for (let k = 0; k <= steps; k++) {
@@ -250,7 +250,8 @@ export class VehiclePhysics {
   /** Pure-pursuit steer angle towards the centreline ahead. */
   lineSteer() {
     const t = this.track;
-    const ld = clamp(5 + 0.42 * this.vx, 6, 38);
+    // Look further ahead the faster we go, or the correction turns twitchy at top speed
+    const ld = clamp(5 + 0.42 * this.vx + 0.002 * this.vx * this.vx, 6, 60);
     const p = t.pointAt(this.q.s + ld, 0, this._target);
     const dx = p.x - this.position.x;
     const dz = p.z - this.position.z;
@@ -260,7 +261,10 @@ export class VehiclePhysics {
     const left = dx * ch - dz * sh;
     const dist = Math.hypot(fwd, left) || 1;
     const wheelbase = this.cgToFront + this.cgToRear;
-    return Math.atan((2 * wheelbase * (left / dist)) / dist);
+    const pursuit = Math.atan((2 * wheelbase * (left / dist)) / dist);
+    // Tyres need slip angle to corner, more of it the faster the car goes; without this
+    // extra lock the car drifts wide through long fast corners before the error builds up
+    return pursuit + wheelbase * this.q.curv * 0.0009 * this.vx * this.vx;
   }
 
   // --- Simulation ------------------------------------------------------
@@ -385,7 +389,8 @@ export class VehiclePhysics {
     const assisted = easy || this.autopilot;
     const tcsLimit = assisted ? 0.8 : 0.97;
     const tcsSlack = assisted ? 0.05 : 0.14;
-    const escGain = (assisted ? 3.2 : 1.3) * (handbrake > 0.5 ? 0.15 : 1);
+    // Stability control works harder under braking, when the unloaded rear is easiest to upset
+    const escGain = (assisted ? 3.2 : 1.3 + brake * 1.9) * (handbrake > 0.5 ? 0.15 : 1);
     let axBody = 0;
     let ayBody = 0;
     let slipF = 0;

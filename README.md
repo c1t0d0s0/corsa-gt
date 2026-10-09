@@ -18,7 +18,7 @@ On a phone in landscape:
 
 ## Features
 
-- **Three circuits** — a parkland circuit (Apex Circuit), a neon street circuit at night (Neo City Highway) and a canyon road with elevation changes (Desert Canyon).
+- **Three circuits** — a high-speed parkland circuit with two kilometre-long straights (Apex Circuit), a neon street circuit at night (Neo City Highway) and a canyon road with elevation changes (Desert Canyon).
 - **Time of day and weather** — noon, sunset or midnight, clear or rain. Rain makes the road wet and reflective and reduces grip.
 - **Driving model** — the tyres really do slip, with a 6-speed gearbox (automatic or manual), surface-dependent grip and solid barriers.
 - **Two assist levels** — *Easy* brakes for corners and steers back to the road when you let go of the wheel; *Normal* leaves you with ABS and light traction control.
