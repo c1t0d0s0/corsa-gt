@@ -90,7 +90,7 @@ Hold the phone in landscape. Held upright, the game pauses and asks you to rotat
 - **Right thumb** — `GAS` and `BRAKE`. Hold `BRAKE` at a standstill to reverse.
 - **`HB`** — handbrake. **`↺`** — recover to track.
 
-Touch devices drive with the automatic gearbox.
+Touch devices drive with the automatic gearbox. The telemetry panel is not available on phone-sized screens, where it would cover the car.
 
 ## Language
 

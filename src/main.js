@@ -33,6 +33,11 @@ class CorsaApp {
     // 2. UI Subsystems
     this.hud = new HUD();
     this.telemetryUI = new TelemetryUI();
+    // Too small to show telemetry without hiding the car (phones); matches the rule in style.css
+    this.smallScreen = window.matchMedia('(max-height: 520px), (max-width: 600px)');
+    this.smallScreen.addEventListener('change', () => {
+      if (this.smallScreen.matches && this.telemetryUI.visible) this.telemetryUI.toggle();
+    });
 
     this.garageUI = new GarageUI(
       (config) => this.carModel.updateCustomization(config),
@@ -103,6 +108,7 @@ class CorsaApp {
   setCamera(mode) {
     const applied = this.renderer.setCameraMode(mode);
     this.carModel.setInteriorVisible(applied === 'cockpit');
+    this.carModel.setHeadlampsVisible(applied !== 'hood' && applied !== 'cockpit');
     this.audio.setInterior(applied === 'cockpit');
     const label = document.getElementById('camera-mode-label');
     if (label) label.textContent = applied.toUpperCase();
@@ -124,6 +130,11 @@ class CorsaApp {
       this.setCamera(this.cameraBeforeGarage);
       this.cameraBeforeGarage = null;
     }
+  }
+
+  toggleTelemetry() {
+    if (this.smallScreen.matches) return;
+    this.telemetryUI.toggle();
   }
 
   togglePause() {
@@ -161,7 +172,7 @@ class CorsaApp {
     on('btn-garage', () => this.toggleGarage());
     on('garage-close-btn', () => this.toggleGarage());
     on('btn-track', () => this.trackSelectUI.toggle());
-    on('btn-telemetry', () => this.telemetryUI.toggle());
+    on('btn-telemetry', () => this.toggleTelemetry());
     on('btn-audio', () => {
       this.audio.setMuted(!this.audio.muted);
       const icon = document.getElementById('audio-icon');
@@ -174,7 +185,7 @@ class CorsaApp {
     this.input.onCameraPress = () => this.cycleCamera();
     this.input.onResetPress = () => this.recover();
     this.input.onGarageToggle = () => this.toggleGarage();
-    this.input.onTelemetryToggle = () => this.telemetryUI.toggle();
+    this.input.onTelemetryToggle = () => this.toggleTelemetry();
     this.input.onPause = () => this.togglePause();
     this.input.onTransmissionToggle = () => {
       this.physics.toggleTransmission();

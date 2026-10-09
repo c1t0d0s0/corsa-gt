@@ -1138,18 +1138,6 @@ body.touch.menu-open .touch-overlay { display: none; }
     max-width: 300px;
     max-height: calc(100dvh - max(6px, env(safe-area-inset-top)) - 54px);
   }
-
-  /* Telemetry moves up to the middle, clear of both thumbs */
-  #telemetry-panel {
-    top: calc(max(6px, env(safe-area-inset-top)) + 46px);
-    bottom: auto;
-    left: 50%;
-    width: 320px;
-    padding: 10px;
-    transform: translateX(-50%) scale(0.62);
-    transform-origin: top center;
-  }
-  #telemetry-panel.hidden { transform: translateX(-50%) scale(0.62) translateY(12px); }
 }
 
 /* Narrow landscape phones: the brand gives way to the buttons */
@@ -1166,4 +1154,13 @@ html:not([data-i18n-ready]) [data-i18n] {
 @media (orientation: portrait) and (max-width: 600px) {
   .title-wordmark { font-size: 25vw; }
   .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; font-size: 0.78rem; }
+}
+
+/* Phone-sized screens have no room for the telemetry panel: it would cover the car.
+   Keep this query in step with smallScreen in main.js. */
+@media (max-height: 520px), (max-width: 600px) {
+  #telemetry-panel,
+  #btn-telemetry {
+    display: none;
+  }
 }

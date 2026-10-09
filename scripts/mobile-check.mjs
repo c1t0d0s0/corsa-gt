@@ -57,6 +57,10 @@ try {
   let issues = await layoutProblems();
   check('HUD and controls fit without overlapping', issues.length === 0, issues.join('; '));
 
+  check('telemetry is not offered on a phone', await run("getComputedStyle(document.getElementById('btn-telemetry')).display === 'none'"));
+  await run("window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT', bubbles: true }))");
+  check('and cannot be opened', await run("!corsa.telemetryUI.visible && getComputedStyle(document.getElementById('telemetry-panel')).display === 'none'"));
+
   const gas = await centre('#touch-accel-btn');
   const pad = await centre('#touch-steer');
   await touch('touchStart', [{ ...gas, id: 1 }]);

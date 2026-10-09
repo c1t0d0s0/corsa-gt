@@ -33,7 +33,7 @@ const BELT = [[2.12, 0.6], [1.7, 0.75], [1.25, 0.83], [0.95, 0.89], [0.2, 0.93],
 const ROOF = [[0.3, 1.285], [-0.2, 1.32], [-1.05, 1.265]];
 const WINDSHIELD = [0.95, 0.3];
 const BACKLIGHT = [-1.05, -1.78];
-const SIDE_GLASS = [0.44, -1.12];
+const SIDE_GLASS = [0.72, -1.12];
 
 /**
  * Half cross-section of the body at station z, from the underside centre (0)
@@ -203,6 +203,7 @@ export class CarModel {
     this.steerPivots = [];
     this.wingGroup = null;
     this.headlightSpots = [];
+    this.headlamps = [];
     this.lightsOn = false;
 
     this.createMaterials();
@@ -258,7 +259,8 @@ export class CarModel {
   }
 
   createBody() {
-    const shell = new THREE.Mesh(buildBodyGeometry(), [this.paintMat, this.glassMat, this.trimMat]);
+    this.bodyGeometry = buildBodyGeometry();
+    const shell = new THREE.Mesh(this.bodyGeometry, [this.paintMat, this.glassMat, this.trimMat]);
     shell.castShadow = true;
     shell.receiveShadow = true;
     this.body.add(shell);
@@ -301,6 +303,7 @@ export class CarModel {
       lamp.position.set(x * 0.54, 0.672, ZF - 0.3);
       lamp.rotation.set(-0.34, x * 0.55, x * -0.1, 'YXZ');
       this.body.add(lamp);
+      this.headlamps.push(lamp);
       this.part(housingGeo, this.glassMat, 0, 0, 0, lamp).castShadow = false;
       this.part(bladeGeo, this.headMat, 0, -0.004, 0.158, lamp).castShadow = false;
 
@@ -373,21 +376,27 @@ export class CarModel {
     this.interior = new THREE.Group();
     this.interior.visible = false;
     this.body.add(this.interior);
-    const dashMat = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.8 });
-    const dash = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.16, 0.5), dashMat);
-    dash.position.set(0, 0.79, 0.66);
-    dash.rotation.x = 0.12;
+    const dashMat = new THREE.MeshStandardMaterial({ color: 0x1d1e22, emissive: 0x08080a, roughness: 0.8 });
+
+    // The body shell is only drawn from outside, so from the driver's seat the doors,
+    // pillars and roof would simply not be there. Line the cabin with the same shape seen
+    // from within: trim where the panels are, a light tint where the glass is.
+    const liningMat = new THREE.MeshStandardMaterial({
+      color: 0x34373d, emissive: 0x0d0e10, roughness: 0.9, side: THREE.BackSide
+    });
+    const windowMat = new THREE.MeshBasicMaterial({
+      color: 0x8fa3b3, transparent: true, opacity: 0.1, side: THREE.BackSide, depthWrite: false
+    });
+    this.interior.add(new THREE.Mesh(this.bodyGeometry, [liningMat, windowMat, liningMat]));
+
+    // Dashboard, running the full width of the cabin up to the base of the windscreen
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(1.76, 0.2, 0.7), dashMat);
+    dash.position.set(0, 0.78, 0.7);
+    dash.rotation.x = 0.1;
     this.interior.add(dash);
     const binnacle = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.12, 0.2), dashMat);
     binnacle.position.set(-0.36, 0.88, 0.56);
     this.interior.add(binnacle);
-    for (const x of [-0.8, 0.8]) {
-      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.06), dashMat);
-      pillar.position.set(x, 1.1, 0.55);
-      pillar.rotation.x = -0.8;
-      pillar.rotation.z = x > 0 ? 0.25 : -0.25;
-      this.interior.add(pillar);
-    }
     this.steeringWheel = new THREE.Group();
     this.steeringWheel.position.set(-0.36, 0.8, 0.36);
     this.steeringWheel.rotation.x = -0.35;
@@ -451,6 +460,14 @@ export class CarModel {
       spot.intensity = on ? (night ? 420 : 160) : 0;
     });
     this.headMat.emissiveIntensity = on ? 7 : 1.6;
+  }
+
+  /**
+   * The lamp units sit proud of the bonnet line, so from the driver's-eye cameras their
+   * glowing strips stick up into view as bright slabs. Hide them there; the beams stay on.
+   */
+  setHeadlampsVisible(visible) {
+    this.headlamps.forEach((lamp) => { lamp.visible = visible; });
   }
 
   setInteriorVisible(visible) {
