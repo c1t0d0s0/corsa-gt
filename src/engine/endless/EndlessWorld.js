@@ -494,7 +494,7 @@ export class EndlessWorld {
         const base = { x: lx, y: s.h, z: lz, ry: r2 * 6.3, tint: r3 };
         if (r1 < p.trees * 0.5 * d) {
           if (!ok(s, 7) || slopeAt(ox + lx, oz + lz, s.h) > 0.7) continue;
-          const conifer = r2 < p.conifer;
+          const conifer = this.coniferAt(ox + lx, oz + lz, s.h, p);
           const h = conifer ? 10 + r3 * 10 : 8 + r3 * 7;
           const wd = h * (conifer ? 0.8 + r1 : 0.9 + r1 * 0.6);
           lists[conifer ? 'conifer' : 'broadleaf'].push({ ...base, y: s.h - 0.2, sx: wd, sy: h, sz: wd });
@@ -557,6 +557,20 @@ export class EndlessWorld {
     if (tile.veg) this.disposeObject(tile.veg);
     tile.veg = veg;
     this.group.add(veg);
+  }
+
+  /**
+   * Conifer or broadleaf? Conifers belong where it's cold: in cold country,
+   * and higher up anywhere (about one step colder per 350 m of altitude). Where
+   * the climate is in between, the two grow in separate stands a few hundred
+   * metres across, never tree by tree.
+   */
+  coniferAt(x, z, h, p) {
+    const cold = p.cold + Math.max(0, h - 80) / 350;
+    const share = smoothstep(0.45, 0.65, cold);
+    if (share <= 0 || share >= 1) return share >= 1;
+    const stand = 0.02 + 0.96 * smoothstep(0.25, 0.75, fbm(x / 220 + 13.1, z / 220 + 7.7, 3, this.gen.noiseSeed + 11));
+    return stand < share;
   }
 
   /** One InstancedMesh; transforms are { x, y, z, s | sx sy sz, rx, ry }. */
