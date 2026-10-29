@@ -357,6 +357,12 @@ body.pre-start #telemetry-panel {
   border-color: var(--color-accent);
 }
 
+/* Autodrive engaged */
+.btn-icon.active {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: var(--color-accent);
+}
+
 /* HUD Overlay */
 #hud-overlay {
   position: absolute;
@@ -824,6 +830,68 @@ body.pre-start #telemetry-panel {
 .apex-bg { background: linear-gradient(135deg, #1e3a1e, #0f172a); }
 .city-bg { background: linear-gradient(135deg, #06b6d4, #0f172a); }
 .desert-bg { background: linear-gradient(135deg, #9a6b43, #0f172a); }
+.endless-bg { background: linear-gradient(135deg, #2f6b3a 0%, #3a87a8 45%, #c9a46a 75%, #0f172a 100%); }
+
+.seed-row {
+  display: flex;
+  gap: 8px;
+}
+
+#seed-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #f8fafc;
+  padding: 8px 12px;
+  font-family: var(--font-hud);
+  font-size: 0.8rem;
+}
+
+#seed-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.seed-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #f8fafc;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-family: var(--font-hud);
+  cursor: pointer;
+}
+
+.seed-btn.seed-go {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #0f172a;
+  font-weight: 700;
+}
+
+/* Long seeds shouldn't push the lap box wider */
+.hud-lap-box.endless #hud-lap-best {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8em;
+}
+
+#fade-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 30;
+}
+
+#fade-overlay.show { opacity: 1; }
 
 .track-info h4 {
   font-family: var(--font-hud);

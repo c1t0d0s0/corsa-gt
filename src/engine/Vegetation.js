@@ -203,6 +203,19 @@ export function tuftModel() {
   return { leaves: cards.build() };
 }
 
+/** Saguaro: a trunk with two crooked arms, 3.4 m tall. */
+export function cactusGeometry() {
+  const trunk = new THREE.CylinderGeometry(0.22, 0.26, 3.4, 8).translate(0, 1.7, 0);
+  const armA = new THREE.CylinderGeometry(0.15, 0.15, 1.3, 7).translate(0.72, 2.25, 0);
+  const elbowA = new THREE.CylinderGeometry(0.15, 0.15, 0.6, 7).rotateZ(Math.PI / 2).translate(0.42, 1.65, 0);
+  const armB = new THREE.CylinderGeometry(0.14, 0.14, 0.9, 7).translate(-0.62, 1.75, 0);
+  const elbowB = new THREE.CylinderGeometry(0.14, 0.14, 0.5, 7).rotateZ(Math.PI / 2).translate(-0.38, 1.35, 0);
+  const parts = [trunk, armA, elbowA, armB, elbowB];
+  const geo = mergeGeometries(parts);
+  parts.forEach((g) => g.dispose());
+  return geo;
+}
+
 /**
  * Wind: the whole plant leans with a slow gust that drifts across the map,
  * and leaves flutter on top of that. Bending grows with height above `base`.

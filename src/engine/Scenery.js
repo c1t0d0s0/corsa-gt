@@ -5,7 +5,7 @@ import {
   buildingTextures, radialTexture, bannerTexture
 } from './ProceduralTextures.js';
 import {
-  broadleafModel, coniferModel, bushModel, tuftModel, foliageMaterial, barkMaterial, tickWind
+  broadleafModel, coniferModel, bushModel, tuftModel, cactusGeometry, foliageMaterial, barkMaterial, tickWind
 } from './Vegetation.js';
 
 const smoothstep = (a, b, x) => {
@@ -629,13 +629,7 @@ export function buildScenery(path, def, group, { mobile = false } = {}) {
     }
     instanced(new THREE.DodecahedronGeometry(1, 0), rockMat, boulders);
 
-    const trunk = new THREE.CylinderGeometry(0.22, 0.26, 3.4, 8).translate(0, 1.7, 0);
-    const armA = new THREE.CylinderGeometry(0.15, 0.15, 1.3, 7).translate(0.72, 2.25, 0);
-    const elbowA = new THREE.CylinderGeometry(0.15, 0.15, 0.6, 7).rotateZ(Math.PI / 2).translate(0.42, 1.65, 0);
-    const armB = new THREE.CylinderGeometry(0.14, 0.14, 0.9, 7).translate(-0.62, 1.75, 0);
-    const elbowB = new THREE.CylinderGeometry(0.14, 0.14, 0.5, 7).rotateZ(Math.PI / 2).translate(-0.38, 1.35, 0);
-    const cactusGeo = mergeGeometries([trunk, armA, elbowA, armB, elbowB]);
-    instanced(cactusGeo, new THREE.MeshStandardMaterial({ color: 0x4f7a43, roughness: 0.9 }), cacti);
+    instanced(cactusGeometry(), new THREE.MeshStandardMaterial({ color: 0x4f7a43, roughness: 0.9 }), cacti);
 
     // Sage scrub and dry bunch grass scattered over the sand
     const tint = new THREE.Color();

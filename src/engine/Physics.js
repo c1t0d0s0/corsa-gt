@@ -54,6 +54,10 @@ export class VehiclePhysics {
     this.drivingMode = 'easy'; // 'easy' (full assists) or 'normal'
     this.transmission = 'auto'; // 'auto' or 'manual'
     this.autopilot = false;
+    // Autopilot cruising: a speed cap (null: as fast as the corners allow) and
+    // the lateral offset it holds (left positive; the left lane on the endless road)
+    this.cruiseKmh = null;
+    this.laneOffset = 0;
     this.engineHp = 650;
     this.weatherGrip = 1.0;
     this.track = null;
@@ -130,6 +134,10 @@ export class VehiclePhysics {
     this.currentSector = 1;
     this.lapDistance = 0;
     this.lapStarted = false;
+    // Endless road: distance driven, and a request for the game to put the car back on the road
+    this.totalDistance = 0;
+    this.offRoadTime = 0;
+    this.needsRecover = false;
 
     this.q = { index: -1, s: 0, offset: 0, y: 0, heading: 0, tx: 0, tz: 1, slope: 0, curv: 0, kerb: 0 };
     this._target = new THREE.Vector3();
@@ -141,6 +149,8 @@ export class VehiclePhysics {
 
   setTrack(trackPath) {
     this.track = trackPath;
+    this.cruiseKmh = trackPath && trackPath.endless ? 90 : null;
+    this.laneOffset = trackPath && trackPath.endless ? trackPath.halfWidth / 2 : 0;
     this.bestLapTime = null;
     this.lastLapTime = null;
     this.currentLap = 1;
@@ -202,7 +212,7 @@ export class VehiclePhysics {
       t.pointAt(s, 0, this.position);
       this.heading = t.headingAt(s);
       t.query(this.position.x, this.position.z, -1, this.q);
-      this.position.y = this.q.y;
+      this.position.y = t.endless ? t.groundAt(this.position.x, this.position.z, this.q) : this.q.y;
     } else {
       this.position.set(0, 0, 0);
       this.heading = 0;
@@ -216,7 +226,8 @@ export class VehiclePhysics {
 
   /** Back to the grid, a few metres before the start/finish line. */
   reset() {
-    this.placeOnTrack(this.track ? this.track.length - 14 : 0);
+    this.placeOnTrack(this.track ? this.track.startS ?? this.track.length - 14 : 0);
+    this.totalDistance = 0;
     this.currentLapTime = 0;
     this.lapDistance = 0;
     this.lapStarted = false;
@@ -226,6 +237,8 @@ export class VehiclePhysics {
   /** Put the car back on the centreline where it currently is. */
   recover() {
     this.placeOnTrack(this.q.s);
+    this.offRoadTime = 0;
+    this.needsRecover = false;
   }
 
   // --- Driver aids -----------------------------------------------------
@@ -252,7 +265,7 @@ export class VehiclePhysics {
     const t = this.track;
     // Look further ahead the faster we go, or the correction turns twitchy at top speed
     const ld = clamp(5 + 0.42 * this.vx + 0.002 * this.vx * this.vx, 6, 60);
-    const p = t.pointAt(this.q.s + ld, 0, this._target);
+    const p = t.pointAt(this.q.s + ld, this.laneOffset, this._target);
     const dx = p.x - this.position.x;
     const dz = p.z - this.position.z;
     const sh = Math.sin(this.heading);
@@ -297,7 +310,7 @@ export class VehiclePhysics {
     const absOff = Math.abs(q.offset);
     let surfaceName = 'asphalt';
     if (absOff > t.halfWidth) {
-      surfaceName = q.kerb && absOff < t.halfWidth + 1.3 ? 'kerb' : t.def.runoffSurface;
+      surfaceName = q.kerb && absOff < t.halfWidth + 1.3 ? 'kerb' : t.endless ? t.runoffAt(q.index) : t.def.runoffSurface;
     }
     const surf = SURFACES[surfaceName] || SURFACES.asphalt;
     this.surface = surfaceName;
@@ -311,7 +324,8 @@ export class VehiclePhysics {
     let lineDelta = 0;
 
     if (this.autopilot) {
-      const vSafe = this.safeSpeedAhead(mu, 0.8, 0.7);
+      let vSafe = this.safeSpeedAhead(mu, 0.8, 0.7);
+      if (this.cruiseKmh) vSafe = Math.min(vSafe, this.cruiseKmh / 3.6);
       lineDelta = this.lineSteer();
       thr = clamp((vSafe - this.vx) * 0.5, 0, 1);
       brk = clamp((this.vx - vSafe) * 0.4, 0, 1);
@@ -501,7 +515,8 @@ export class VehiclePhysics {
     const prevS = q.s;
     t.query(this.position.x, this.position.z, q.index, q);
     this.wallHit = Math.max(0, this.wallHit - dt * 20);
-    const limit = t.wallOffset - 0.95;
+    // The endless road has guardrails only along hazards; elsewhere the ground just carries on
+    const limit = t.endless ? t.railLimitAt(q.index, q.offset) : t.wallOffset - 0.95;
     if (Math.abs(q.offset) > limit) {
       const side = Math.sign(q.offset);
       const nx = q.tz * side; // unit vector pointing into the wall
@@ -532,7 +547,17 @@ export class VehiclePhysics {
         this.wallHit = Math.max(this.wallHit, vn);
       }
     }
-    this.position.y = q.y;
+    if (t.endless) {
+      t.update(q.index); // top up the road ahead
+      this.position.y = t.groundAt(this.position.x, this.position.z, q);
+      // Strayed too far or into water: ask the game to put the car back
+      this.offRoadTime = Math.abs(q.offset) > t.recoverOffset ? this.offRoadTime + dt : 0;
+      if (this.offRoadTime > 1.5 || Math.abs(q.offset) > t.recoverOffset * 2 || t.inWater(q, this.position.y)) {
+        this.needsRecover = true;
+      }
+    } else {
+      this.position.y = q.y;
+    }
 
     // 6. Gearbox
     if ((this.transmission === 'auto' || this.autopilot) && gear >= 1 && this.shiftTimer <= 0) {
@@ -551,7 +576,8 @@ export class VehiclePhysics {
     if (dS < -t.length / 2) dS += t.length;
     this.lapDistance += dS;
     this.currentLapTime += dt;
-    const crossedLine = prevS > t.length * 0.75 && q.s < t.length * 0.25;
+    this.totalDistance += dS;
+    const crossedLine = !t.endless && prevS > t.length * 0.75 && q.s < t.length * 0.25;
     if (crossedLine) {
       if (this.lapStarted && this.lapDistance > t.length * 0.9) {
         this.lastLapTime = this.currentLapTime;

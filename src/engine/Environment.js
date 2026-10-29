@@ -33,6 +33,9 @@ const PRESETS = {
   }
 };
 
+const DUST = new THREE.Color(0xd8bf98);
+const SEA_AIR = new THREE.Color(0x9cc4e4);
+
 /** Overcast variants swap in a flat grey sky; the sun is hidden and dimmed. */
 const RAIN = {
   noon: { top: 0x58626e, horizon: 0x98a3ad, fog: 0x8f9aa4, hemiSky: 0xaab4c0 },
@@ -118,6 +121,8 @@ export class Environment {
     this.time = 0;
     this.preset = PRESETS.noon;
     this.wet = false;
+    this.region = { haze: 1, warm: 0 };
+    this.night = false;
 
     scene.fog = new THREE.FogExp2(0xb4cbe2, 0.001);
 
@@ -247,8 +252,8 @@ export class Environment {
     this.hemiLight.groundColor.setHex(p.hemiGround);
     this.hemiLight.intensity = p.hemiIntensity * (rainy ? 1.25 : 1);
 
-    this.scene.fog.color.setHex(p.fog);
-    this.scene.fog.density = p.fogDensity * (rainy ? 2.6 : 1);
+    this.night = timeOfDay === 'midnight';
+    this.applyFog();
     this.scene.environmentIntensity = p.envIntensity;
 
     this.bakeEnvironment(p, timeOfDay);
@@ -260,6 +265,27 @@ export class Environment {
       wet: rainy,
       night: timeOfDay === 'midnight'
     };
+  }
+
+  /**
+   * Local air on the endless road: denser, dustier haze over the desert,
+   * clearer and bluer by the sea. Multiplies the time-of-day fog.
+   */
+  setRegion(haze, warm) {
+    if (Math.abs(haze - this.region.haze) < 0.005 && Math.abs(warm - this.region.warm) < 0.005) return;
+    this.region.haze = haze;
+    this.region.warm = warm;
+    this.applyFog();
+  }
+
+  applyFog() {
+    const p = this.preset;
+    const { haze, warm } = this.region;
+    const fog = this.scene.fog;
+    fog.color.setHex(p.fog);
+    // Tint only by day; at night the fog is just dark
+    if (!this.night) fog.color.lerp(warm > 0 ? DUST : SEA_AIR, Math.abs(warm) * 0.3);
+    fog.density = p.fogDensity * (this.wet ? 2.6 : 1) * haze;
   }
 
   /** Render the sky into a prefiltered cube map so paint and glass have something to reflect. */

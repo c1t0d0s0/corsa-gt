@@ -19,6 +19,7 @@ const ACTION_BINDINGS = {
   KeyE: 'onGearUp',
   KeyQ: 'onGearDown',
   KeyM: 'onTransmissionToggle',
+  KeyO: 'onAutopilotToggle',
   KeyP: 'onPause',
   Escape: 'onPause'
 };
@@ -53,6 +54,7 @@ export class InputManager {
     this.onGarageToggle = null;
     this.onTelemetryToggle = null;
     this.onTransmissionToggle = null;
+    this.onAutopilotToggle = null;
     this.onGearUp = null;
     this.onGearDown = null;
     this.onPause = null;
@@ -64,6 +66,7 @@ export class InputManager {
   setupKeyboard() {
     const handleKey = (e, isDown) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return; // typing a seed, not driving
       const held = KEY_BINDINGS[e.code];
       if (held) {
         e.preventDefault();

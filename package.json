@@ -11,7 +11,8 @@
     "check:browser": "node scripts/browser-check.mjs",
     "check:mobile": "node scripts/mobile-check.mjs",
     "check:i18n": "node scripts/i18n-check.mjs",
-    "check:audio": "node scripts/audio-check.mjs"
+    "check:audio": "node scripts/audio-check.mjs",
+    "check:endless": "node scripts/endless-check.mjs"
   },
   "dependencies": {
     "three": "^0.170.0"

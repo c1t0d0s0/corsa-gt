@@ -1,3 +1,5 @@
+import { randomSeed } from '../engine/endless/Biomes.js';
+
 /**
  * Track Circuit & Environment Settings Selection Modal.
  */
@@ -11,6 +13,7 @@ export class TrackSelectUI {
     this.currentTOD = 'noon';
     this.currentWeather = 'clear';
     this.visible = false;
+    this.seedInput = document.getElementById('seed-input');
 
     this.setupListeners();
   }
@@ -23,13 +26,23 @@ export class TrackSelectUI {
   }
 
   /** Reflect the state the game actually loaded (e.g. a circuit's default time of day). */
-  sync(trackId, timeOfDay, weather) {
+  sync(trackId, timeOfDay, weather, seed = null) {
     this.currentTrack = trackId;
+    if (seed !== null && this.seedInput) this.seedInput.value = seed;
     this.currentTOD = timeOfDay;
     this.currentWeather = weather;
     document.querySelectorAll('.track-card').forEach(c => c.classList.toggle('selected', c.dataset.track === trackId));
     document.querySelectorAll('.tod-btn').forEach(b => b.classList.toggle('active', b.dataset.tod === timeOfDay));
     document.querySelectorAll('.weather-btn').forEach(b => b.classList.toggle('active', b.dataset.weather === weather));
+  }
+
+  /** The typed seed, or a fresh random one if the box is empty. */
+  seed() {
+    const typed = this.seedInput ? this.seedInput.value.trim() : '';
+    if (typed) return typed;
+    const fresh = randomSeed();
+    if (this.seedInput) this.seedInput.value = fresh;
+    return fresh;
   }
 
   setupListeners() {
@@ -39,8 +52,17 @@ export class TrackSelectUI {
       card.addEventListener('click', (e) => {
         if (card.dataset.track === this.currentTrack) return;
         // The game calls sync() back with the circuit's default time of day
-        if (this.onChangeTrack) this.onChangeTrack(card.dataset.track);
+        if (this.onChangeTrack) this.onChangeTrack(card.dataset.track, { seed: this.seed() });
       });
+    });
+
+    // Endless road seed: type one, roll a random one, or drive the typed one again
+    const drive = () => this.onChangeTrack && this.onChangeTrack('endless', { seed: this.seed() });
+    document.getElementById('seed-go')?.addEventListener('click', drive);
+    this.seedInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') drive(); });
+    document.getElementById('seed-random')?.addEventListener('click', () => {
+      if (this.seedInput) this.seedInput.value = randomSeed();
+      drive();
     });
 
     // Time of Day Buttons

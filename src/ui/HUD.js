@@ -1,4 +1,5 @@
 import { formatTime } from '../utils/MathUtils.js';
+import { t } from '../i18n.js';
 
 /**
  * Glassmorphic Racing HUD Interface Controller.
@@ -15,6 +16,8 @@ export class HUD {
     this.lapBestEl = document.getElementById('hud-lap-best');
     this.lapNumberEl = document.getElementById('hud-lap-num');
     this.sectorEl = document.getElementById('hud-sector');
+    this.lapLabelEls = [document.getElementById('hud-lap-label-1'), document.getElementById('hud-lap-label-2')];
+    this.lapBox = document.querySelector('.hud-lap-box');
 
     this.shiftLights = document.querySelectorAll('.shift-light');
     this.tachBar = document.getElementById('hud-tach-bar');
@@ -26,6 +29,8 @@ export class HUD {
     this.mapCanvas = document.createElement('canvas');
     this.worldToMap = null;
     this.cache = {};
+    this.endless = null; // the endless road's path, when driving it
+    this.mapAge = 0;
   }
 
   /** Write text only when it changed, to keep the DOM quiet at 60fps. */
@@ -37,6 +42,15 @@ export class HUD {
 
   /** Pre-render the circuit outline once per track. */
   setTrack(path) {
+    this.endless = path.endless ? path : null;
+    this.cache = {};
+    if (this.lapBox) this.lapBox.classList.toggle('endless', !!this.endless);
+    this.setText(this.lapLabelEls[0], 'label1', this.endless ? t('hud.distance') : 'CURRENT');
+    this.setText(this.lapLabelEls[1], 'label2', this.endless ? t('hud.seed') : 'BEST');
+    if (this.endless) {
+      this.worldToMap = null;
+      return;
+    }
     if (!this.minimapCanvas) return;
     const width = this.minimapCanvas.width;
     const height = this.minimapCanvas.height;
@@ -116,14 +130,56 @@ export class HUD {
       });
     }
 
-    // 3. Lap Timing & Sector
-    this.setText(this.lapCurrentEl, 'lap', formatTime(physics.lapStarted ? physics.currentLapTime : 0));
-    this.setText(this.lapBestEl, 'best', formatTime(physics.bestLapTime === null ? NaN : physics.bestLapTime));
-    this.setText(this.lapNumberEl, 'lapNum', `LAP ${physics.currentLap}`);
-    this.setText(this.sectorEl, 'sector', `SECTOR ${physics.currentSector}`);
+    // 3. Lap Timing & Sector; on the endless road, distance, landscape and seed instead
+    if (this.endless) {
+      this.setText(this.lapCurrentEl, 'lap', `${(physics.totalDistance / 1000).toFixed(1)} km`);
+      this.setText(this.lapBestEl, 'best', this.endless.seed);
+      this.setText(this.lapNumberEl, 'lapNum', t(`biome.${this.endless.biomeAt(physics.q.index)}`));
+      this.setText(this.sectorEl, 'sector', formatTime(physics.currentLapTime));
+      if (this.minimapCtx && --this.mapAge <= 0) this.drawEndlessMap(physics);
+    } else {
+      this.setText(this.lapCurrentEl, 'lap', formatTime(physics.lapStarted ? physics.currentLapTime : 0));
+      this.setText(this.lapBestEl, 'best', formatTime(physics.bestLapTime === null ? NaN : physics.bestLapTime));
+      this.setText(this.lapNumberEl, 'lapNum', `LAP ${physics.currentLap}`);
+      this.setText(this.sectorEl, 'sector', `SECTOR ${physics.currentSector}`);
+    }
 
     // 4. Minimap Rendering
     if (this.minimapCtx && this.worldToMap) this.renderMinimap(physics);
+  }
+
+  /** The endless road around the car, redrawn every few frames since it never stops changing. */
+  drawEndlessMap(physics) {
+    this.mapAge = 15;
+    const path = this.endless;
+    const width = this.minimapCanvas.width;
+    const height = this.minimapCanvas.height;
+    this.mapCanvas.width = width;
+    this.mapCanvas.height = height;
+    const scale = width / 1800;
+    const cx = physics.position.x;
+    const cz = physics.position.z;
+    // Same orientation as the circuit maps: +Z up, +X to the left
+    this.worldToMap = (x, z) => ({ x: width / 2 - (x - cx) * scale, y: height / 2 - (z - cz) * scale });
+
+    const ctx = this.mapCanvas.getContext('2d');
+    const carAbs = path.sAbs[physics.q.index];
+    ctx.beginPath();
+    let first = true;
+    for (let k = Math.max(path.tail, carAbs - 1000); k < Math.min(path.head, carAbs + 1600); k += 6) {
+      const i = k % path.n;
+      const m = this.worldToMap(path.dx[i], path.dz[i]);
+      if (first) ctx.moveTo(m.x, m.y); else ctx.lineTo(m.x, m.y);
+      first = false;
+    }
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
+    ctx.stroke();
   }
 
   renderMinimap(physics) {

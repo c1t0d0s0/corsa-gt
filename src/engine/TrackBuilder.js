@@ -2,69 +2,13 @@ import * as THREE from 'three';
 import { getTrackDef } from './track/TrackData.js';
 import { TrackPath } from './track/TrackPath.js';
 import { buildScenery } from './Scenery.js';
+import { sweep, mirror } from './track/Sweep.js';
+import { EndlessPath } from './endless/EndlessPath.js';
+import { EndlessWorld } from './endless/EndlessWorld.js';
 import {
   asphaltTextures, grassTextures, sandTextures, concreteTextures,
   kerbTexture, checkerTexture, bannerTexture
 } from './ProceduralTextures.js';
-
-/**
- * Sweep a 2D cross-section along the whole circuit as one mesh.
- *
- * profile: [{ o, y, u?, c?, cut? }] — lateral offset (left +), height above the
- * road, optional texture u, optional grey level, and `cut` to not join this
- * point to the next (for hard edges). Offsets should increase for an
- * upward-facing surface.
- */
-export function sweep(path, profile, { step = 2, uvScale = 4, mask = null, colors = false } = {}) {
-  const n = path.n;
-  const rows = Math.ceil(n / step);
-  const cols = profile.length;
-  const vRepeat = Math.max(1, Math.round(path.length / uvScale));
-  const pos = new Float32Array((rows + 1) * cols * 3);
-  const uv = new Float32Array((rows + 1) * cols * 2);
-  const col = colors ? new Float32Array((rows + 1) * cols * 3) : null;
-  const index = [];
-
-  for (let r = 0; r <= rows; r++) {
-    const i = r === rows ? 0 : r * step;
-    const lx = path.tz[i];
-    const lz = -path.tx[i];
-    const v = (r / rows) * vRepeat;
-    for (let k = 0; k < cols; k++) {
-      const p = profile[k];
-      const w = r * cols + k;
-      pos[w * 3] = path.px[i] + lx * p.o;
-      pos[w * 3 + 1] = path.py[i] + p.y;
-      pos[w * 3 + 2] = path.pz[i] + lz * p.o;
-      uv[w * 2] = p.u !== undefined ? p.u : p.o / uvScale;
-      uv[w * 2 + 1] = v;
-      if (col) {
-        const c = p.c !== undefined ? p.c : 1;
-        col[w * 3] = col[w * 3 + 1] = col[w * 3 + 2] = c;
-      }
-    }
-    if (r === rows) break;
-    if (mask && !mask(i)) continue;
-    for (let k = 0; k < cols - 1; k++) {
-      if (profile[k].cut) continue;
-      const a = r * cols + k;
-      const b = a + cols;
-      index.push(a, b, a + 1, a + 1, b, b + 1);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  if (col) geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setIndex(index);
-  geo.computeVertexNormals();
-  return geo;
-}
-
-/** Mirror a left-side profile to the right, keeping offsets increasing. */
-const mirror = (profile) => profile.map((p) => ({ ...p, o: -p.o })).reverse()
-  .map((p, k, arr) => ({ ...p, cut: k < arr.length - 1 ? profile[profile.length - 2 - k].cut : false }));
 
 const RUNOFF_LOOK = {
   grass: { textures: grassTextures, color: 0xffffff, uvScale: 7 },
@@ -86,10 +30,13 @@ export class TrackBuilder {
     this.def = null;
     this.roadMaterial = null;
     this.scenery = null;
+    this.world = null;
   }
 
-  build(trackId = 'apex') {
+  /** @param options.seed  for the endless road: same seed, same road */
+  build(trackId = 'apex', { seed = 'corsa' } = {}) {
     this.dispose();
+    if (trackId === 'endless') return this.buildEndless(seed);
     const def = getTrackDef(trackId);
     const path = new TrackPath(def);
     this.def = def;
@@ -190,6 +137,26 @@ export class TrackBuilder {
     return path;
   }
 
+  /** The generated road: its world streams in around the car as it drives (see update). */
+  buildEndless(seed) {
+    const path = new EndlessPath(seed);
+    this.def = path.def;
+    this.path = path;
+    this.group = new THREE.Group();
+    this.scene.add(this.group);
+    this.world = new EndlessWorld(path, this.group, { mobile: this.mobile });
+    this.roadMaterial = this.world.roadMat;
+    // Have the surroundings of the start ready before the first frame
+    const start = path.pointAt(path.startS);
+    for (let i = 0; i < 200 && (i === 0 || !this.world.idle); i++) this.world.update(start, 0, 4000);
+    return path;
+  }
+
+  /** Per frame: stream the endless road's world around `focus`. */
+  update(focus, dt) {
+    if (this.world) this.world.update(focus, dt);
+  }
+
   buildStartLine(path, hw, wo) {
     const origin = path.pointAt(0);
     const heading = path.headingAt(0);
@@ -275,6 +242,7 @@ export class TrackBuilder {
     });
     this.group = null;
     this.scenery = null;
+    this.world = null;
     this.roadMaterial = null;
   }
 }

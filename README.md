@@ -19,6 +19,8 @@ On a phone in landscape:
 ## Features
 
 - **Three circuits** — a high-speed parkland circuit with two kilometre-long straights (Apex Circuit), a neon street circuit at night (Neo City Highway) and a canyon road with elevation changes (Desert Canyon).
+- **Endless road** — a road that never ends, generated from a seed. Forest, riverside, meadow, coast, dry steppe, desert and mountain passes drift gradually into one another (never forest straight into desert), with natural climbs and descents through the hills. Type the same seed to drive the same road again.
+- **Autodrive** — the car drives itself, cruising in the left lane at around 90 km/h, so you can just watch the scenery.
 - **Time of day and weather** — noon, sunset or midnight, clear or rain. Rain makes the road wet and reflective and reduces grip.
 - **Driving model** — the tyres really do slip, with a 6-speed gearbox (automatic or manual), surface-dependent grip and solid barriers.
 - **Two assist levels** — *Easy* brakes for corners and steers back to the road when you let go of the wheel; *Normal* leaves you with ABS and light traction control.
@@ -65,8 +67,15 @@ The build uses relative paths, so `dist/` can be hosted from any static web serv
 | `P` / `Esc` | Pause |
 | `G` | Garage |
 | `T` | Telemetry |
+| `O` | Autodrive on / off |
 
 The **Restart** button in the top bar puts the car back on the grid.
+
+### Endless road
+
+Choose **Endless Road** under **Tracks**. The road is generated from the seed in the box below the cards: type any word or number and press **Drive** to drive that road (the same seed always gives the same road), or press 🎲 for a random one. The current seed is shown in the HUD, top left, with the distance driven and the landscape you're in.
+
+There are no walls. You can leave the road, but stray too far or into water and the car is put back on it. Guardrails line the road along the sea, rivers and steep drops.
 
 ### Gamepad
 
@@ -102,7 +111,7 @@ Useful for demos, screenshots and testing. Combine them freely, e.g. `/?track=ci
 
 | Parameter | Values | Effect |
 | --- | --- | --- |
-| `track` | `apex`, `city`, `desert` | Starting circuit |
+| `track` | `apex`, `city`, `desert`, `endless` | Starting circuit |
 | `tod` | `noon`, `sunset`, `midnight` | Time of day |
 | `weather` | `rainy` | Start in the rain |
 | `cam` | `chase`, `hood`, `cockpit`, `orbit` | Starting camera |
@@ -110,6 +119,7 @@ Useful for demos, screenshots and testing. Combine them freely, e.g. `/?track=ci
 | `touch` | `1` | Show the touch controls on a desktop |
 | `autostart` | `1` | Skip the start screen (no sound) |
 | `autopilot` | `1` | The car drives itself |
+| `seed` | any text | Seed for the endless road (`track=endless`) |
 | `t` | seconds | Fast-forward the simulation before the first frame |
 
 ## Checks
@@ -125,6 +135,7 @@ npm run check:browser   # menus, cameras, keyboard driving, track switching
 npm run check:mobile    # phone layout and multi-touch controls
 npm run check:i18n      # language selection
 npm run check:audio     # engine sound: pitch, loudness, no clipping
+npm run check:endless   # endless road: streaming, seeds, autodrive, recovery
 ```
 
 Each takes an optional URL and a directory to write screenshots to:
@@ -151,10 +162,12 @@ src/
     CarModel.js         Procedural car
     TrackBuilder.js     Road, kerbs, barriers, start line
     Scenery.js          Terrain, trees, city, canyon
+    Vegetation.js       Trees, bushes, grass and cacti built from alpha-cut cards
     Effects.js          Tyre smoke, skid marks, rain
     ProceduralTextures.js
     AudioEngine.js      Synthesised engine, exhaust, turbo, wind and tyre sound
     track/              Circuit definitions and centreline queries
+    endless/            Endless road: landscapes, road generator, streaming world
   ui/                   HUD, telemetry, garage, track select, touch controls
   utils/                Input handling, math helpers
 scripts/                Check scripts

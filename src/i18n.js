@@ -39,7 +39,23 @@ const STRINGS = {
     'nav.restart.title': 'Start again from the grid ([R] recovers where you are)',
     'hud.trans.title': 'Transmission [M]',
     'touch.recover.label': 'Recover to track',
-    'touch.handbrake.label': 'Handbrake'
+    'touch.handbrake.label': 'Handbrake',
+    'key.autodrive': 'Autodrive',
+    'nav.auto': 'Autodrive',
+    'nav.auto.title': 'Let the car drive itself [O]',
+    'seed.title': 'ENDLESS ROAD SEED',
+    'seed.placeholder': 'Any word or number',
+    'seed.go': 'DRIVE',
+    'seed.random.title': 'New random seed',
+    'hud.distance': 'DISTANCE',
+    'hud.seed': 'SEED',
+    'biome.forest': 'FOREST',
+    'biome.riverside': 'RIVERSIDE',
+    'biome.meadow': 'MEADOW',
+    'biome.coast': 'COAST',
+    'biome.steppe': 'STEPPE',
+    'biome.desert': 'DESERT',
+    'biome.mountain': 'MOUNTAINS'
   },
   ja: {
     'start.button': 'ENGINE START',
@@ -74,7 +90,23 @@ const STRINGS = {
     'nav.restart.title': 'スタート地点からやり直す ([R] はその場でコース復帰)',
     'hud.trans.title': 'トランスミッション [M]',
     'touch.recover.label': 'コース復帰',
-    'touch.handbrake.label': 'ハンドブレーキ'
+    'touch.handbrake.label': 'ハンドブレーキ',
+    'key.autodrive': 'オートドライブ',
+    'nav.auto': 'オートドライブ',
+    'nav.auto.title': '車が自動で走る [O]',
+    'seed.title': 'エンドレスロードのシード',
+    'seed.placeholder': '好きな言葉や数字',
+    'seed.go': 'このシードで走る',
+    'seed.random.title': 'ランダムなシード',
+    'hud.distance': '走行距離',
+    'hud.seed': 'シード',
+    'biome.forest': '森',
+    'biome.riverside': '川沿い',
+    'biome.meadow': '草原',
+    'biome.coast': '海沿い',
+    'biome.steppe': '乾いた草原',
+    'biome.desert': '砂漠',
+    'biome.mountain': '山道'
   }
 };
 
@@ -96,6 +128,7 @@ export function applyTranslations(root = document) {
   document.documentElement.lang = lang;
   root.querySelectorAll('[data-i18n]').forEach((el) => { el.innerHTML = t(el.dataset.i18n); });
   root.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.dataset.i18nTitle); });
+  root.querySelectorAll('[data-i18n-placeholder]').forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
   root.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
   document.documentElement.dataset.i18nReady = '';
 }

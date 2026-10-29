@@ -5,6 +5,7 @@ import { AudioEngine } from './engine/AudioEngine.js';
 import { CarModel } from './engine/CarModel.js';
 import { Effects } from './engine/Effects.js';
 import { getTrackDef } from './engine/track/TrackData.js';
+import { randomSeed } from './engine/endless/Biomes.js';
 import { InputManager } from './utils/InputManager.js';
 import { HUD } from './ui/HUD.js';
 import { TelemetryUI } from './ui/Telemetry.js';
@@ -48,13 +49,14 @@ class CorsaApp {
     );
 
     this.trackSelectUI = new TrackSelectUI(
-      (trackId) => this.loadTrack(trackId),
+      (trackId, { seed } = {}) => this.loadTrack(trackId, null, { seed }),
       (tod, weather) => this.setEnvironment(tod, weather)
     );
 
     this.started = false;
     this.paused = false;
     this.cameraBeforeGarage = null;
+    this.recovering = false;
     this.weather = params.get('weather') === 'rainy' ? 'rainy' : 'clear';
     this.timeOfDay = 'noon';
     this.lastTime = performance.now();
@@ -62,8 +64,8 @@ class CorsaApp {
 
     this.setupEvents();
     this.garageUI.applyAll();
-    this.physics.autopilot = params.get('autopilot') === '1';
-    this.loadTrack(params.get('track') || 'apex', params.get('tod'));
+    this.loadTrack(params.get('track') || 'apex', params.get('tod'), { seed: params.get('seed') || randomSeed() });
+    if (params.get('autopilot') === '1') this.setAutopilot(true);
     this.startCamera = params.get('cam') || 'chase';
     if (params.get('autostart') === '1') {
       this.start(false);
@@ -168,6 +170,7 @@ class CorsaApp {
       const label = document.getElementById('mode-label');
       if (label) label.textContent = t(next === 'easy' ? 'mode.easy' : 'mode.normal');
     });
+    on('btn-auto', () => this.setAutopilot(!this.physics.autopilot));
     on('btn-camera', () => this.cycleCamera());
     on('btn-garage', () => this.toggleGarage());
     on('garage-close-btn', () => this.toggleGarage());
@@ -187,6 +190,7 @@ class CorsaApp {
     this.input.onGarageToggle = () => this.toggleGarage();
     this.input.onTelemetryToggle = () => this.toggleTelemetry();
     this.input.onPause = () => this.togglePause();
+    this.input.onAutopilotToggle = () => this.setAutopilot(!this.physics.autopilot);
     this.input.onTransmissionToggle = () => {
       this.physics.toggleTransmission();
       this.updateTransmissionLabel();
@@ -200,9 +204,10 @@ class CorsaApp {
     });
   }
 
-  loadTrack(trackId, timeOfDay = null) {
-    const def = getTrackDef(trackId);
-    const path = this.trackBuilder.build(def.id);
+  /** @param options.seed  endless road only: which road to generate */
+  loadTrack(trackId, timeOfDay = null, { seed = null } = {}) {
+    const path = this.trackBuilder.build(trackId === 'endless' ? 'endless' : getTrackDef(trackId).id, { seed: seed || randomSeed() });
+    const def = path.def;
     this.physics.setTrack(path);
     this.effects.clear();
     this.hud.setTrack(path);
@@ -211,7 +216,7 @@ class CorsaApp {
     if (badge) badge.textContent = def.name;
 
     const tod = ['noon', 'sunset', 'midnight'].includes(timeOfDay) ? timeOfDay : def.defaultTod;
-    this.trackSelectUI.sync(def.id, tod, this.weather);
+    this.trackSelectUI.sync(def.id, tod, this.weather, path.endless ? path.seed : null);
     this.setEnvironment(tod, this.weather);
     this.carModel.update(this.physics, 0);
     this.renderer.snapCamera();
@@ -229,9 +234,33 @@ class CorsaApp {
 
   /** Back to the grid for a fresh run. */
   restart() {
+    // The endless road behind the car is long gone: start the same road over from its beginning
+    const track = this.physics.track;
+    if (track && track.endless) {
+      this.loadTrack('endless', this.timeOfDay, { seed: track.seed });
+      return;
+    }
     this.physics.reset();
     this.effects.breakSkids();
     this.renderer.snapCamera();
+  }
+
+  setAutopilot(on) {
+    this.physics.autopilot = on;
+    document.getElementById('btn-auto')?.classList.toggle('active', on);
+  }
+
+  /** Endless road: the car strayed too far or into water. Fade out, put it back, fade in. */
+  autoRecover() {
+    if (this.recovering) return;
+    this.recovering = true;
+    const fade = document.getElementById('fade-overlay');
+    fade?.classList.add('show');
+    setTimeout(() => {
+      this.recover();
+      fade?.classList.remove('show');
+      this.recovering = false;
+    }, 280);
   }
 
   /** Lift the car back onto the road where it is. */
@@ -263,6 +292,7 @@ class CorsaApp {
 
     this.input.update(dt);
     if (running) this.physics.update(this.input, dt);
+    if (this.physics.needsRecover) this.autoRecover();
 
     this.carModel.update(this.physics, running ? dt : 0);
 
@@ -286,6 +316,14 @@ class CorsaApp {
     }, dt);
 
     this.renderer.update(this.carModel.group, this.physics, dt);
+    this.trackBuilder.update(this.carModel.group.position, dt);
+    const world = this.trackBuilder.world;
+    if (world) {
+      const air = world.gen.paramsCached(world.carAbs);
+      this.renderer.environment.setRegion(air.haze, air.warm);
+    } else {
+      this.renderer.environment.setRegion(1, 0);
+    }
     const cam = this.renderer.camera;
     const bufferHeight = this.renderer.renderer.domElement.height;
     this.effects.update(this.physics, this.carModel.group, running ? dt : 0, bufferHeight / (2 * Math.tan((cam.fov * Math.PI) / 360)));

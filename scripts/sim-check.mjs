@@ -3,6 +3,9 @@
 import { TRACKS } from '../src/engine/track/TrackData.js';
 import { TrackPath } from '../src/engine/track/TrackPath.js';
 import { VehiclePhysics } from '../src/engine/Physics.js';
+import { RoadGenerator } from '../src/engine/endless/RoadGenerator.js';
+import { EndlessPath } from '../src/engine/endless/EndlessPath.js';
+import { NEIGHBOURS } from '../src/engine/endless/Biomes.js';
 
 const DT = 1 / 120;
 let failures = 0;
@@ -149,6 +152,81 @@ for (const def of Object.values(TRACKS)) {
   }
   if (def.id === 'apex') benchmarks(path);
 }
+
+/** The generated road: deterministic, never crossing itself, within its curvature and grade limits. */
+function checkEndlessLayout(seed, km) {
+  const gen = new RoadGenerator(seed);
+  const n = km * 1000;
+  const xs = new Float64Array(n);
+  const zs = new Float64Array(n);
+  let maxCurv = 0, maxGrade = 0, hash = 0;
+  for (let i = 0; i < n; i++) {
+    const smp = gen.next();
+    xs[i] = smp.x;
+    zs[i] = smp.z;
+    maxCurv = Math.max(maxCurv, Math.abs(smp.curv));
+    maxGrade = Math.max(maxGrade, Math.abs(smp.slope));
+    hash = (Math.imul(hash, 31) + Math.round(smp.x * 10) + Math.round(smp.y * 10) * 7 + Math.round(smp.z * 10) * 13) | 0;
+  }
+  // Closest approach between parts of the road at least 500 m apart along it
+  const cell = 60;
+  const grid = new Map();
+  for (let i = 0; i < n; i += 4) {
+    const key = `${Math.floor(xs[i] / cell)},${Math.floor(zs[i] / cell)}`;
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push(i);
+  }
+  let minSep = Infinity;
+  for (let i = 0; i < n; i += 4) {
+    const gx = Math.floor(xs[i] / cell);
+    const gz = Math.floor(zs[i] / cell);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+      for (const j of grid.get(`${gx + a},${gz + b}`) || []) {
+        if (Math.abs(i - j) < 500) continue;
+        minSep = Math.min(minSep, Math.hypot(xs[i] - xs[j], zs[i] - zs[j]));
+      }
+    }
+  }
+  const segs = gen.schedule.segments.filter((sg) => sg.start < n);
+  const badStep = segs.find((sg, i) => i > 0 && !NEIGHBOURS[segs[i - 1].biome].includes(sg.biome));
+  console.log(`  seed "${seed}": ${km}km  min radius ${(1 / maxCurv).toFixed(0)}m  max grade ${(maxGrade * 100).toFixed(1)}%  min separation ${minSep === Infinity ? '>60' : minSep.toFixed(0)}m`);
+  console.log(`    ${segs.map((sg) => `${sg.biome} ${((sg.end - sg.start) / 1000).toFixed(1)}km`).join(' → ')}`);
+  if (1 / maxCurv < 55) fail(`endless "${seed}": bend tighter than 55 m`);
+  if (maxGrade > 0.105) fail(`endless "${seed}": grade over 10%`);
+  if (minSep < 60) fail(`endless "${seed}": road comes back within ${minSep.toFixed(0)} m of itself`);
+  if (badStep) fail(`endless "${seed}": ${badStep.prev} borders ${badStep.biome}`);
+  return hash;
+}
+
+/** Autopilot cruising the endless road: stays in its lane at a relaxed pace. */
+function runEndless(seed, km, weather) {
+  const path = new EndlessPath(seed);
+  const car = new VehiclePhysics();
+  car.setWeather(weather);
+  car.setTrack(path);
+  car.autopilot = true;
+  let t = 0, maxErr = 0, recovers = 0, maxKmh = 0;
+  while (car.totalDistance < km * 1000 && t < km * 120) {
+    car.step(idle, DT);
+    t += DT;
+    if (car.needsRecover) { recovers++; car.recover(); }
+    if (car.totalDistance > 200) maxErr = Math.max(maxErr, Math.abs(car.q.offset - car.laneOffset));
+    maxKmh = Math.max(maxKmh, car.speedKmh);
+  }
+  const avg = (car.totalDistance / t) * 3.6;
+  console.log(`  autopilot "${seed}" ${weather}: ${(car.totalDistance / 1000).toFixed(1)}km  avg ${avg.toFixed(0)}km/h  vmax ${maxKmh.toFixed(0)}km/h  max lane error ${maxErr.toFixed(2)}m  recovers ${recovers}`);
+  if (car.totalDistance < km * 1000) fail(`autopilot "${seed}" did not cover ${km} km`);
+  if (recovers > 0) fail(`autopilot "${seed}" left the road`);
+  if (maxErr > path.halfWidth / 2) fail(`autopilot "${seed}" wandered out of its lane`);
+  if (maxKmh > 100) fail(`autopilot "${seed}" cruised too fast`);
+}
+
+console.log('\n== ENDLESS ROAD');
+const hashes = ['alpha', 'alpha', 'pine-4821', 'coast'].map((seed) => checkEndlessLayout(seed, 50));
+if (hashes[0] !== hashes[1]) fail('endless: same seed gave a different road');
+if (hashes[0] === hashes[2]) fail('endless: different seeds gave the same road');
+for (const seed of ['alpha', 'pine-4821']) runEndless(seed, 20, 'clear');
+runEndless('coast', 10, 'rainy');
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');
 process.exit(failures ? 1 : 0);

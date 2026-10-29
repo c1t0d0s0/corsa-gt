@@ -42,6 +42,7 @@
       <div><dt><kbd>P</kbd></dt><dd data-i18n="key.pause"></dd></div>
       <div><dt><kbd>G</kbd></dt><dd data-i18n="key.garage"></dd></div>
       <div><dt><kbd>T</kbd></dt><dd data-i18n="key.telemetry"></dd></div>
+      <div><dt><kbd>O</kbd></dt><dd data-i18n="key.autodrive"></dd></div>
     </dl>
     <dl class="legend touch-hints">
       <div><dt><kbd>◀ ▶</kbd></dt><dd data-i18n="touch.steer"></dd></div>
@@ -77,6 +78,9 @@
       <button id="btn-mode" class="btn-icon btn-mode-accent" data-i18n-title="mode.title">
         <span class="icon">🔰</span> <span id="mode-label" data-i18n="mode.easy"></span>
       </button>
+      <button id="btn-auto" class="btn-icon" data-i18n-title="nav.auto.title">
+        <span class="icon">🚗</span> <span data-i18n="nav.auto"></span>
+      </button>
       <button id="btn-camera" class="btn-icon" data-i18n-title="nav.camera.title">
         <span class="icon">📷</span> <span id="camera-mode-label">CHASE</span>
       </button>
@@ -107,11 +111,11 @@
         <span id="hud-sector" class="hud-label-muted">SECTOR 1</span>
       </div>
       <div class="lap-time-row">
-        <span class="label">CURRENT</span>
+        <span id="hud-lap-label-1" class="label">CURRENT</span>
         <span id="hud-lap-current" class="digital-time">00:00.00</span>
       </div>
       <div class="lap-time-row">
-        <span class="label">BEST</span>
+        <span id="hud-lap-label-2" class="label">BEST</span>
         <span id="hud-lap-best" class="digital-time text-accent">--:--.--</span>
       </div>
     </div>
@@ -285,6 +289,9 @@
     </div>
   </div>
 
+  <!-- Brief fade while the car is put back on the endless road -->
+  <div id="fade-overlay"></div>
+
   <!-- Track Circuit Selection Modal -->
   <div id="track-select-modal" class="modal-overlay hidden">
     <div class="modal-card glassmorphism">
@@ -315,6 +322,22 @@
               <h4>DESERT CANYON RUN</h4>
               <p>High elevation dips, sweeping canyon turns, and dusty desert atmosphere.</p>
             </div>
+          </div>
+          <div class="track-card" data-track="endless">
+            <div class="track-preview endless-bg"></div>
+            <div class="track-info">
+              <h4>ENDLESS ROAD</h4>
+              <p>A road that never ends, generated from a seed. Forest, river, meadow, coast, desert and mountain passes drift into one another.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="custom-section">
+          <h3 data-i18n="seed.title"></h3>
+          <div class="seed-row">
+            <input id="seed-input" type="text" maxlength="40" spellcheck="false" autocomplete="off" data-i18n-placeholder="seed.placeholder">
+            <button id="seed-random" class="seed-btn" data-i18n-title="seed.random.title">🎲</button>
+            <button id="seed-go" class="seed-btn seed-go" data-i18n="seed.go"></button>
           </div>
         </div>
 

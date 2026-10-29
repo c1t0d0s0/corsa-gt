@@ -161,6 +161,14 @@ export function stoneTextures() {
   });
 }
 
+/** Rippled water: only the normal map is used. */
+export function waterTextures() {
+  return surfaceSet('water', 256, {
+    cells: 8, octaves: 3, grain: 0, bump: 7, seed: 83,
+    shade: () => [255, 255, 255]
+  });
+}
+
 /** Vertically streaked bark; v runs up the trunk. */
 export function barkTextures() {
   return surfaceSet('bark', 256, {
