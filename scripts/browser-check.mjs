@@ -51,9 +51,18 @@ try {
     await click(`.wing-btn[data-wing="${wing}"]`);
     check(`wing ${wing}`, (await run('corsa.carModel.wingStyle')) === wing && await waitFrames(2));
   }
-  await click('.tune-btn[data-hp="850"]');
+  await click('.tune-btn[data-level="2"]');
   check('paint, rims and tune applied', await run('corsa.carModel.bodyColor === 0x2563eb && corsa.carModel.rimColor === 0xb08d3c && corsa.physics.engineHp === 850'));
   await shot('garage');
+  // Change car and back: paint and wheels carry over; wing and tune presets follow the car
+  await click('.car-btn[data-car="piccola"]');
+  check('switch to the second car', await run("corsa.carModel.spec.id === 'piccola' && corsa.physics.driveAxle === 'front' && corsa.physics.engineHp === 320 && corsa.audio.cylinders === 4") && await waitFrames(2));
+  check('  paint and wheels carried over, wing set to the car\'s own', await run("corsa.carModel.bodyColor === 0x2563eb && corsa.carModel.rimColor === 0xb08d3c && corsa.carModel.wingStyle === 'stealth'"));
+  check('  tune labels follow the car', await run("document.querySelector('.tune-btn[data-level=\"2\"]').textContent.includes('320')"));
+  await shot('garage-piccola');
+  await click('.car-btn[data-car="gt"]');
+  check('switch back', await run("corsa.carModel.spec.id === 'gt' && corsa.physics.driveAxle === 'rear' && corsa.physics.engineHp === 850") && await waitFrames(2));
+  check('  only one car in the scene', await run("corsa.renderer.scene.children.filter((o) => o === corsa.carModel.group || (o.isGroup && o.userData.cameras)).length === 1"));
   await click('#garage-close-btn');
   check('garage closes, camera restored', await run("!corsa.garageUI.visible && corsa.renderer.cameraMode === 'chase'") && await waitFrames());
 

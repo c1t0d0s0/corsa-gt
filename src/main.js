@@ -3,6 +3,7 @@ import { VehiclePhysics } from './engine/Physics.js';
 import { TrackBuilder } from './engine/TrackBuilder.js';
 import { AudioEngine } from './engine/AudioEngine.js';
 import { CarModel } from './engine/CarModel.js';
+import { getCarSpec } from './engine/CarSpecs.js';
 import { Effects } from './engine/Effects.js';
 import { getTrackDef } from './engine/track/TrackData.js';
 import { randomSeed } from './engine/endless/Biomes.js';
@@ -27,9 +28,8 @@ class CorsaApp {
     this.touch = new TouchControls(this.input, { onRecover: () => this.recover() });
     this.renderer = new RenderEngine(this.container, { mobile: this.touch.enabled });
     this.trackBuilder = new TrackBuilder(this.renderer.scene, { mobile: this.touch.enabled });
-    this.carModel = new CarModel();
+    this.carModel = null; // built by setCar() once the garage settings exist
     this.effects = new Effects(this.renderer.scene);
-    this.renderer.scene.add(this.carModel.group);
 
     // 2. UI Subsystems
     this.hud = new HUD();
@@ -41,7 +41,10 @@ class CorsaApp {
     });
 
     this.garageUI = new GarageUI(
-      (config) => this.carModel.updateCustomization(config),
+      (config) => {
+        this.setCar(config.carId);
+        this.carModel.updateCustomization(config);
+      },
       (hp) => {
         this.physics.setEngineTune(hp);
         return this.physics.estimateTopSpeedKmh();
@@ -63,6 +66,8 @@ class CorsaApp {
     this.frameError = false;
 
     this.setupEvents();
+    this.garageUI.currentConfig.carId = getCarSpec(params.get('car')).id;
+    this.garageUI.selectCar(this.garageUI.currentConfig.carId);
     this.garageUI.applyAll();
     this.loadTrack(params.get('track') || 'apex', params.get('tod'), { seed: params.get('seed') || randomSeed() });
     if (params.get('autopilot') === '1') this.setAutopilot(true);
@@ -105,6 +110,29 @@ class CorsaApp {
     root.requestFullscreen({ navigationUI: 'hide' })
       .then(() => window.screen.orientation && window.screen.orientation.lock && window.screen.orientation.lock('landscape'))
       .catch(() => {});
+  }
+
+  /** Swap the car (body, handling and engine note), keeping paint and wheels. */
+  setCar(id) {
+    const spec = getCarSpec(id);
+    if (this.carModel && this.carModel.spec.id === spec.id) return;
+    const cfg = this.garageUI.currentConfig;
+    const old = this.carModel;
+    this.carModel = new CarModel({
+      spec, bodyColor: cfg.bodyColor, paintFinish: cfg.paintFinish, rimColor: cfg.rimColor, wingStyle: cfg.wingStyle
+    });
+    if (old) {
+      this.renderer.scene.remove(old.group);
+      old.dispose();
+    }
+    this.renderer.scene.add(this.carModel.group);
+    this.physics.setCar(spec.physics);
+    this.audio.setEngine(spec.audio);
+    if (this.look) this.carModel.setLights(this.look.headlights, this.look.night);
+    const mode = this.renderer.cameraMode;
+    this.carModel.setInteriorVisible(mode === 'cockpit');
+    this.carModel.setHeadlampsVisible(mode !== 'hood' && mode !== 'cockpit');
+    this.carModel.update(this.physics, 0);
   }
 
   setCamera(mode) {
@@ -226,6 +254,7 @@ class CorsaApp {
     this.timeOfDay = timeOfDay;
     this.weather = weather;
     const look = this.renderer.setEnvironmentPreset(timeOfDay, weather);
+    this.look = look;
     this.trackBuilder.setLook(look);
     this.carModel.setLights(look.headlights, look.night);
     this.effects.setLook(look);

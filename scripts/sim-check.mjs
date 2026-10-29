@@ -3,6 +3,16 @@
 import { TRACKS } from '../src/engine/track/TrackData.js';
 import { TrackPath } from '../src/engine/track/TrackPath.js';
 import { VehiclePhysics } from '../src/engine/Physics.js';
+import { CAR_SPECS } from '../src/engine/CarSpecs.js';
+
+// Every check runs once per car, each on its middle ("track spec") engine tune
+let spec = CAR_SPECS.gt;
+function makeCar() {
+  const car = new VehiclePhysics();
+  car.setCar(spec.physics);
+  car.setEngineTune(spec.tunes[1]);
+  return car;
+}
 import { RoadGenerator } from '../src/engine/endless/RoadGenerator.js';
 import { EndlessPath } from '../src/engine/endless/EndlessPath.js';
 import { NEIGHBOURS } from '../src/engine/endless/Biomes.js';
@@ -32,7 +42,7 @@ function checkLayout(path) {
 }
 
 function runLaps(path, { mode, weather, driver, laps = 2 }) {
-  const car = new VehiclePhysics();
+  const car = makeCar();
   car.setDrivingMode(mode);
   car.setWeather(weather);
   car.setTrack(path);
@@ -65,7 +75,7 @@ function runLaps(path, { mode, weather, driver, laps = 2 }) {
  * what the chosen mode provides.
  */
 function runKeyboardLaps(path, { mode, weather, laps = 2 }) {
-  const car = new VehiclePhysics();
+  const car = makeCar();
   car.setDrivingMode(mode);
   car.setWeather(weather);
   car.setTrack(path);
@@ -99,7 +109,7 @@ function runKeyboardLaps(path, { mode, weather, laps = 2 }) {
 
 function benchmarks(path) {
   for (const mode of ['easy', 'normal']) {
-    const car = new VehiclePhysics();
+    const car = makeCar();
     car.setDrivingMode(mode);
     car.setTrack(path);
     let t = 0;
@@ -114,14 +124,14 @@ function benchmarks(path) {
     if (car.speedKmh > 0.1) fail(`${mode} creeps at rest (${car.speedKmh.toFixed(2)}km/h)`);
   }
   // Steering sign: steering right from +Z heading must move towards -X
-  const car = new VehiclePhysics();
+  const car = makeCar();
   car.setDrivingMode('normal');
   car.setTrack(path);
   for (let i = 0; i < 360; i++) car.step({ steering: 1, throttle: 0.5, brake: 0, handbrake: 0 }, DT);
   if (!(car.position.x < -0.5)) fail(`steer right went to x=${car.position.x.toFixed(2)}`);
   // Panic input at speed must not spin the car: flat out, then full lock
   for (const mode of ['easy', 'normal']) {
-    const c = new VehiclePhysics();
+    const c = makeCar();
     c.setDrivingMode(mode);
     c.setTrack(path);
     while (c.speedKmh < 150) c.step({ steering: 0, throttle: 1, brake: 0, handbrake: 0 }, DT);
@@ -134,24 +144,27 @@ function benchmarks(path) {
     if (slide > 0.45) fail(`${mode} spins on full lock at speed`);
   }
   // Reverse: holding brake from rest backs up
-  const rev = new VehiclePhysics();
+  const rev = makeCar();
   rev.setTrack(path);
   const z0 = rev.position.z;
   for (let i = 0; i < 360; i++) rev.step({ steering: 0, throttle: 0, brake: 1, handbrake: 0 }, DT);
   if (!(rev.position.z < z0 - 3) || rev.currentGear !== 0) fail('reverse does not engage');
 }
 
-for (const def of Object.values(TRACKS)) {
-  console.log(`\n== ${def.name}`);
-  const path = new TrackPath(def);
-  checkLayout(path);
-  for (const weather of ['clear', 'rainy']) {
-    for (const mode of ['easy', 'normal']) runLaps(path, { mode, weather, driver: 'autopilot' });
-    runLaps(path, { mode: 'easy', weather, driver: 'throttle-only' });
-    for (const mode of ['easy', 'normal']) runKeyboardLaps(path, { mode, weather });
+for (spec of Object.values(CAR_SPECS)) {
+  for (const def of Object.values(TRACKS)) {
+    console.log(`\n== ${def.name} / ${spec.name}`);
+    const path = new TrackPath(def);
+    if (spec.id === 'gt') checkLayout(path);
+    for (const weather of ['clear', 'rainy']) {
+      for (const mode of ['easy', 'normal']) runLaps(path, { mode, weather, driver: 'autopilot' });
+      runLaps(path, { mode: 'easy', weather, driver: 'throttle-only' });
+      for (const mode of ['easy', 'normal']) runKeyboardLaps(path, { mode, weather });
+    }
+    if (def.id === 'apex') benchmarks(path);
   }
-  if (def.id === 'apex') benchmarks(path);
 }
+spec = CAR_SPECS.gt;
 
 /** The generated road: deterministic, never crossing itself, within its curvature and grade limits. */
 function checkEndlessLayout(seed, km) {
@@ -201,7 +214,7 @@ function checkEndlessLayout(seed, km) {
 /** Autopilot cruising the endless road: stays in its lane at a relaxed pace. */
 function runEndless(seed, km, weather) {
   const path = new EndlessPath(seed);
-  const car = new VehiclePhysics();
+  const car = makeCar();
   car.setWeather(weather);
   car.setTrack(path);
   car.autopilot = true;

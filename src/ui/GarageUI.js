@@ -1,6 +1,8 @@
+import { getCarSpec } from '../engine/CarSpecs.js';
+
 /**
  * Car Customizer Garage Panel Controller.
- * Allows modifying paint colors, finishes, wing aero, rim colors, and engine tuning specs.
+ * Allows choosing the car and modifying paint colors, finishes, wing aero, rim colors, and engine tuning specs.
  */
 export class GarageUI {
   constructor(onUpdateCar, onEngineTuneChange) {
@@ -10,11 +12,12 @@ export class GarageUI {
     this.onEngineTuneChange = onEngineTuneChange;
 
     this.currentConfig = {
+      carId: 'gt',
       bodyColor: 0xdc2626,
       paintFinish: 'metallic',
       wingStyle: 'gt3',
       rimColor: 0x18181b,
-      engineHp: 650
+      tuneLevel: 1 // index into the car's tune presets
     };
 
     this.setupListeners();
@@ -28,6 +31,11 @@ export class GarageUI {
   }
 
   setupListeners() {
+    // Car
+    document.querySelectorAll('.car-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.selectCar(btn.dataset.car));
+    });
+
     // Body Paint Swatches
     const swatches = document.querySelectorAll('.body-swatch');
     swatches.forEach(swatch => {
@@ -78,13 +86,32 @@ export class GarageUI {
     // Engine Power Preset
     const tuneBtns = document.querySelectorAll('.tune-btn');
     tuneBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const hp = parseInt(e.target.dataset.hp, 10);
-        this.currentConfig.engineHp = hp;
-        tuneBtns.forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
+      btn.addEventListener('click', () => {
+        this.currentConfig.tuneLevel = parseInt(btn.dataset.level, 10);
+        tuneBtns.forEach(b => b.classList.toggle('active', b === btn));
         this.applyTune();
       });
+    });
+  }
+
+  /** Switch car, keeping paint and wheels; the wing and tune presets follow the car. */
+  selectCar(carId) {
+    const spec = getCarSpec(carId);
+    this.currentConfig.carId = spec.id;
+    // Each car starts on the wing that suits it; paint and wheels carry over
+    this.currentConfig.wingStyle = spec.defaultWing;
+    document.querySelectorAll('.wing-btn').forEach(b => b.classList.toggle('active', b.dataset.wing === spec.defaultWing));
+    document.querySelectorAll('.car-btn').forEach(b => b.classList.toggle('active', b.dataset.car === spec.id));
+    this.labelTunes();
+    this.applyChanges();
+    this.applyTune();
+  }
+
+  labelTunes() {
+    const spec = getCarSpec(this.currentConfig.carId);
+    document.querySelectorAll('.tune-btn').forEach(btn => {
+      const level = parseInt(btn.dataset.level, 10);
+      btn.textContent = `${spec.tuneNames[level]} (${spec.tunes[level]} HP)`;
     });
   }
 
@@ -96,7 +123,7 @@ export class GarageUI {
 
   /** Push the engine preset to the car; the callback reports the resulting top speed. */
   applyTune() {
-    const hp = this.currentConfig.engineHp;
+    const hp = getCarSpec(this.currentConfig.carId).tunes[this.currentConfig.tuneLevel];
     const topSpeed = this.onEngineTuneChange ? this.onEngineTuneChange(hp) : 0;
     const hpBar = document.getElementById('stat-power-bar');
     const speedBar = document.getElementById('stat-speed-bar');
@@ -106,6 +133,7 @@ export class GarageUI {
 
   /** Apply the defaults shown in the panel so the car matches the UI from the first frame. */
   applyAll() {
+    this.labelTunes();
     this.applyChanges();
     this.applyTune();
   }

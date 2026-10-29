@@ -8,26 +8,25 @@
  * past them. Combustion rasp, intake roar, turbo whistle, overrun crackle,
  * wind, road and tyre noise are layered on top.
  */
-const CYLINDERS = 6;
 const HARMONICS = 40;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
  * One engine cycle (two crank turns) as a set of harmonics. Harmonic n sits
- * at engine order n/2, so the firing frequency is harmonic CYLINDERS.
+ * at engine order n/2, so the firing frequency is harmonic `cylinders`.
  * `brightness` 0 = closed throttle (soft, bassy), 1 = wide open (hard-edged).
  */
-function engineWave(ctx, brightness) {
+function engineWave(ctx, brightness, cylinders) {
   const real = new Float32Array(HARMONICS + 1);
   const imag = new Float32Array(HARMONICS + 1);
   const rolloff = lerp(1.25, 0.62, brightness);
   for (let n = 1; n <= HARMONICS; n++) {
     let weight;
-    if (n % CYLINDERS === 0) weight = 1; // every cylinder firing in turn
-    else if (n % (CYLINDERS / 2) === 0) weight = lerp(0.3, 0.5, brightness); // bank-to-bank imbalance
+    if (n % cylinders === 0) weight = 1; // every cylinder firing in turn
+    else if (n % (cylinders / 2) === 0) weight = lerp(0.3, 0.5, brightness); // bank-to-bank imbalance
     else weight = lerp(0.1, 0.2, brightness); // cylinder-to-cylinder variation: the burble
-    const amp = weight / Math.pow(n / CYLINDERS + 0.35, rolloff);
+    const amp = weight / Math.pow(n / cylinders + 0.35, rolloff);
     // Fixed scattered phases keep the waveform from collapsing into one sharp spike
     const phase = (n * 2.399963) % (Math.PI * 2);
     real[n] = amp * Math.cos(phase);
@@ -48,6 +47,7 @@ function softClipCurve(drive) {
 
 export class AudioEngine {
   constructor() {
+    this.cylinders = 6;
     this.ctx = null;
     this.initialized = false;
     this.muted = false;
@@ -115,7 +115,7 @@ export class AudioEngine {
       this.engineOscs = [];
       this.offGain = gain(1);
       this.onGain = gain(0);
-      const layers = [[engineWave(ctx, 0), this.offGain], [engineWave(ctx, 1), this.onGain]];
+      const layers = [[engineWave(ctx, 0, this.cylinders), this.offGain], [engineWave(ctx, 1, this.cylinders), this.onGain]];
       for (const [wave, target] of layers) {
         // A slightly detuned twin thickens the note
         for (const cents of [0, 7]) {
@@ -197,6 +197,15 @@ export class AudioEngine {
     }
   }
 
+  /** Switch engine character, e.g. when changing car. Safe to call before init. */
+  setEngine({ cylinders }) {
+    this.cylinders = cylinders;
+    if (!this.initialized) return;
+    const waves = [engineWave(this.ctx, 0, cylinders), engineWave(this.ctx, 1, cylinders)];
+    // Oscillators were created off-load pair first, then on-load pair
+    this.engineOscs.forEach((osc, i) => osc.setPeriodicWave(waves[i < 2 ? 0 : 1]));
+  }
+
   unlock() {
     if (!this.initialized) this.init();
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
@@ -224,7 +233,7 @@ export class AudioEngine {
     // Engine core
     const cycleHz = rpm / 120;
     this.engineOscs.forEach((osc) => set(osc.frequency, cycleHz, 0.03));
-    set(this.firingOsc.frequency, cycleHz * CYLINDERS, 0.03);
+    set(this.firingOsc.frequency, cycleHz * this.cylinders, 0.03);
     set(this.onGain.gain, Math.sqrt(load) * 0.95);
     set(this.offGain.gain, Math.sqrt(1 - load) * 0.8);
     set(this.drive.gain, 0.4 + load * 0.75 + norm * 0.2);

@@ -1,16 +1,14 @@
 import * as THREE from 'three';
 import { clamp, damp, lerp } from '../utils/MathUtils.js';
+import { CAR_SPECS } from './CarSpecs.js';
 
 const G = 9.81;
 const FIXED_DT = 1 / 120;
 const SUBSTEPS = 2;
 
-// Index 0 is reverse so the HUD's "gear 0 = R" convention holds
-const GEAR_RATIOS = [-3.4, 3.3, 2.2, 1.62, 1.26, 1.03, 0.86];
-const FINAL_DRIVE = 3.7;
 const DRIVETRAIN_EFF = 0.9;
-const WHEEL_RADIUS = 0.33;
 
+// Shape of the torque curve for an engine that revs to 8200; other engines are scaled to their redline
 const TORQUE_CURVE = [
   [1000, 0.62], [2500, 0.82], [4500, 1.0], [6200, 0.98], [7400, 0.86], [8200, 0.7]
 ];
@@ -62,18 +60,6 @@ export class VehiclePhysics {
     this.weatherGrip = 1.0;
     this.track = null;
 
-    // Chassis
-    this.mass = 1300;
-    this.inertia = 1900;
-    this.cgToFront = 1.25;
-    this.cgToRear = 1.35;
-    this.cgHeight = 0.48;
-    this.wheelRadius = WHEEL_RADIUS;
-    this.tyreMu = 1.3;
-    this.dragArea = 0.9;
-    this.liftArea = 1.5;
-    this.brakeG = 1.25;
-
     // Dynamic state
     this.position = new THREE.Vector3();
     this.velocity = new THREE.Vector3();
@@ -93,8 +79,6 @@ export class VehiclePhysics {
     this.speed = 0;
     this.speedKmh = 0;
     this.rpm = 1000;
-    this.maxRpm = 8200;
-    this.idleRpm = 1000;
     this.currentGear = 1;
     this.steerRad = 0;
     this.steerAngle = 0; // -1 (left) .. +1 (right), for UI
@@ -142,10 +126,31 @@ export class VehiclePhysics {
     this.q = { index: -1, s: 0, offset: 0, y: 0, heading: 0, tx: 0, tz: 1, slope: 0, curv: 0, kerb: 0 };
     this._target = new THREE.Vector3();
 
-    this.applyTune();
+    this.setCar(CAR_SPECS.gt.physics);
   }
 
   // --- Configuration ---------------------------------------------------
+
+  /** Chassis, tyres, gearing and engine limits for one car (see CarSpecs.js). */
+  setCar(p) {
+    this.mass = p.mass;
+    this.inertia = p.inertia;
+    this.cgToFront = p.cgToFront;
+    this.cgToRear = p.cgToRear;
+    this.cgHeight = p.cgHeight;
+    this.tyreMu = p.tyreMu;
+    this.dragArea = p.dragArea;
+    this.liftArea = p.liftArea;
+    this.brakeG = p.brakeG;
+    this.driveAxle = p.driveAxle;
+    this.gearRatios = p.gearRatios;
+    this.finalDrive = p.finalDrive;
+    this.wheelRadius = p.wheelRadius;
+    this.maxRpm = p.maxRpm;
+    this.idleRpm = p.idleRpm;
+    if (this.currentGear !== undefined && this.rpm < this.idleRpm) this.rpm = this.idleRpm;
+    this.applyTune();
+  }
 
   setTrack(trackPath) {
     this.track = trackPath;
@@ -180,12 +185,13 @@ export class VehiclePhysics {
   applyTune() {
     const powerScale = this.drivingMode === 'easy' ? 0.8 : 1.0;
     const watts = this.engineHp * 745.7 * powerScale;
-    this.peakTorque = watts / ((7200 * 2 * Math.PI) / 60 * 0.87);
+    // Peak power arrives about 1000 rpm short of the redline
+    this.peakTorque = watts / (((this.maxRpm - 1000) * 2 * Math.PI) / 60 * 0.87);
   }
 
   /** Drag/gearing limited top speed in km/h, for the garage stat bars. */
   estimateTopSpeedKmh() {
-    const gearLimit = ((this.maxRpm * 2 * Math.PI) / 60 / (GEAR_RATIOS[6] * FINAL_DRIVE)) * WHEEL_RADIUS;
+    const gearLimit = ((this.maxRpm * 2 * Math.PI) / 60 / (this.gearRatios[6] * this.finalDrive)) * this.wheelRadius;
     const watts = this.engineHp * 745.7 * DRIVETRAIN_EFF;
     const dragLimit = Math.cbrt(watts / (0.5 * 1.2 * this.dragArea));
     return Math.min(gearLimit, dragLimit) * 3.6;
@@ -383,8 +389,8 @@ export class VehiclePhysics {
 
     // 3. Powertrain
     const gear = this.currentGear;
-    const ratio = GEAR_RATIOS[gear] * FINAL_DRIVE;
-    const wheelRpm = (vAbs / WHEEL_RADIUS) * Math.abs(ratio) * (60 / (2 * Math.PI));
+    const ratio = this.gearRatios[gear] * this.finalDrive;
+    const wheelRpm = (vAbs / this.wheelRadius) * Math.abs(ratio) * (60 / (2 * Math.PI));
     let engineRpm = Math.max(this.idleRpm, wheelRpm);
     if (gear <= 1) engineRpm = Math.max(engineRpm, this.idleRpm + drive * 2800); // clutch slip off the line
     this.shiftTimer = Math.max(0, this.shiftTimer - dt);
@@ -392,10 +398,10 @@ export class VehiclePhysics {
     let driveForce = 0;
     const cut = this.shiftTimer > 0.13 || engineRpm > this.maxRpm - 60;
     if (!cut && drive > 0) {
-      driveForce = (this.peakTorque * torqueShape(engineRpm) * drive * ratio * DRIVETRAIN_EFF) / WHEEL_RADIUS;
+      driveForce = (this.peakTorque * torqueShape((engineRpm * 8200) / this.maxRpm) * drive * ratio * DRIVETRAIN_EFF) / this.wheelRadius;
     }
     // Engine braking, fading out near standstill
-    const engineBrake = (1 - drive) * (40 + 0.011 * engineRpm) * Math.abs(ratio) / WHEEL_RADIUS * smoothstep(1, 5, vAbs);
+    const engineBrake = (1 - drive) * (40 + 0.011 * engineRpm) * Math.abs(ratio) / this.wheelRadius * smoothstep(1, 5, vAbs);
 
     // 4. Integrate dynamics
     const h = dt / SUBSTEPS;
@@ -443,15 +449,24 @@ export class VehiclePhysics {
       let fbR = Math.min(brakeTotal * 0.38, rearCap * 0.55 * Math.max(0.2, spareR));
       if (handbrake > 0.5) fbR = rearCap * 0.95;
 
-      // Drive: traction control gives cornering priority; "normal" lets the rear be over-driven a little
-      let fxR = driveForce - sgn * engineBrake;
-      const driveLimit = rearCap * Math.min(tcsLimit, spareR * tcsLimit + tcsSlack);
-      spin = tcsLimit < 0.9 ? 0 : Math.max(0, Math.abs(fxR) / rearCap - 1);
+      // Drive: traction control gives cornering priority; "normal" lets the driven wheels be
+      // over-driven a little. Front-drive cars put their power through the steered wheels.
+      const fwd = this.driveAxle === 'front';
+      const driveCap = fwd ? frontCap : rearCap;
+      let fxD = driveForce - sgn * engineBrake;
+      // A front-drive car keeps a bigger cornering reserve: over-driving the steered wheels
+      // just pushes it wide, which is never the fun kind of slide
+      const driveLimit = fwd
+        ? driveCap * Math.min(tcsLimit, spareF * tcsLimit + Math.min(tcsSlack, 0.03))
+        : driveCap * Math.min(tcsLimit, spareR * tcsLimit + tcsSlack);
+      spin = tcsLimit < 0.9 ? 0 : Math.max(0, Math.abs(fxD) / driveCap - 1);
       // Engine braking (force against the selected gear's direction) gets a much smaller share
-      const overrun = Math.min(driveLimit, rearCap * 0.25);
-      fxR = gear === 0 ? clamp(fxR, -driveLimit, overrun) : clamp(fxR, -overrun, driveLimit);
+      const overrun = Math.min(driveLimit, driveCap * 0.25);
+      fxD = gear === 0 ? clamp(fxD, -driveLimit, overrun) : clamp(fxD, -overrun, driveLimit);
+      const fxF = fwd ? fxD : 0;
+      const fxR = fwd ? 0 : fxD;
 
-      const usedF = fbF / frontCap;
+      const usedF = Math.min(1, Math.hypot(fxF, fbF) / frontCap);
       const usedR = Math.min(1, Math.hypot(fxR, fbR) / rearCap);
       const latF = Math.sqrt(Math.max(0.08, 1 - usedF * usedF));
       const latR = Math.sqrt(Math.max(0.08, 1 - usedR * usedR));
@@ -464,9 +479,9 @@ export class VehiclePhysics {
       const gravity = m * G * q.slope * Math.cos(wrapAngle(this.heading - q.heading));
       const resist = fbF * cd + fbR + m * (0.12 + surf.drag);
 
-      let fx = fxR - fyF * sd - drag - gravity;
-      const fy = fyF * cd + fyR;
-      let mz = a * fyF * cd - b * fyR;
+      let fx = fxR + fxF * cd - fyF * sd - drag - gravity;
+      const fy = fyF * cd + fxF * sd + fyR;
+      let mz = a * (fyF * cd + fxF * sd) - b * fyR;
 
       // Stability control. Mostly it calms over-rotation; it only helps the nose in a
       // little when the car is under-rotating, and it pushes back once the tail steps out.
@@ -562,11 +577,11 @@ export class VehiclePhysics {
     // 6. Gearbox
     if ((this.transmission === 'auto' || this.autopilot) && gear >= 1 && this.shiftTimer <= 0) {
       const load = Math.max(drive, brake * 0.8);
-      if (wheelRpm > lerp(3200, 7500, drive) && gear < 6 && spin < 0.05) {
+      if (wheelRpm > lerp(3200, this.maxRpm - 700, drive) && gear < 6 && spin < 0.05) {
         this.changeGear(gear + 1);
       } else if (gear > 1) {
-        const lowerRpm = (wheelRpm * GEAR_RATIOS[gear - 1]) / GEAR_RATIOS[gear];
-        if (wheelRpm < lerp(1400, 3800, load) && lowerRpm < 7000) this.changeGear(gear - 1);
+        const lowerRpm = (wheelRpm * this.gearRatios[gear - 1]) / this.gearRatios[gear];
+        if (wheelRpm < lerp(1400, 3800, load) && lowerRpm < this.maxRpm - 1200) this.changeGear(gear - 1);
       }
     }
 
@@ -605,8 +620,11 @@ export class VehiclePhysics {
     const moving = smoothstep(4, 10, Math.hypot(this.vx, this.vy));
     const lateralSlip = Math.max(0, Math.max(Math.abs(slipF), Math.abs(slipR)) - 0.12) / 0.14;
     this.slipAmount = clamp(Math.max(lateralSlip, spin * 2, handbrake > 0.5 ? 1 : 0) * moving, 0, 1.5);
-    this.wheelOmegaFront = this.vx / WHEEL_RADIUS;
-    this.wheelOmegaRear = handbrake > 0.5 ? 0 : (this.vx / WHEEL_RADIUS) * (1 + Math.min(spin, 1) * sgn);
+    const rolling = this.vx / this.wheelRadius;
+    const spinning = rolling * (1 + Math.min(spin, 1) * sgn);
+    const fwd = this.driveAxle === 'front';
+    this.wheelOmegaFront = fwd ? spinning : rolling;
+    this.wheelOmegaRear = handbrake > 0.5 ? 0 : fwd ? rolling : spinning;
     this.updateReadouts(axBody, ayBody, dt);
   }
 
@@ -665,7 +683,7 @@ export class VehiclePhysics {
       return true;
     }
     // Refuse a downshift that would over-rev the engine
-    const rpmAfter = (Math.abs(this.vx) / WHEEL_RADIUS) * GEAR_RATIOS[gear - 1] * FINAL_DRIVE * (60 / (2 * Math.PI));
+    const rpmAfter = (Math.abs(this.vx) / this.wheelRadius) * this.gearRatios[gear - 1] * this.finalDrive * (60 / (2 * Math.PI));
     if (rpmAfter > this.maxRpm) return false;
     this.changeGear(gear - 1);
     return true;

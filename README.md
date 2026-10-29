@@ -25,7 +25,8 @@ On a phone in landscape:
 - **Driving model** — the tyres really do slip, with a 6-speed gearbox (automatic or manual), surface-dependent grip and solid barriers.
 - **Two assist levels** — *Easy* brakes for corners and steers back to the road when you let go of the wheel; *Normal* leaves you with ABS and light traction control.
 - **Four cameras** — chase, hood, cockpit and a free orbit view.
-- **Garage** — body colour, paint finish, wheel colour, rear wing and engine tune.
+- **Two cars** — the Corsa GT, a rear-drive coupé that tops 300 km/h, and the Corsa Piccola, a light front-drive city car with round headlamps, a white roof and a high-revving four-cylinder.
+- **Garage** — choice of car, body colour, paint finish, wheel colour, rear wing and engine tune.
 - **Plays on phones** — on-screen controls and a compact HUD in landscape.
 - **English and Japanese UI** — chosen from the browser language.
 - **Keyboard, gamepad and touch** input.
@@ -114,6 +115,7 @@ Useful for demos, screenshots and testing. Combine them freely, e.g. `/?track=ci
 | `track` | `apex`, `city`, `desert`, `endless` | Starting circuit |
 | `tod` | `noon`, `sunset`, `midnight` | Time of day |
 | `weather` | `rainy` | Start in the rain |
+| `car` | `gt`, `piccola` | Starting car |
 | `cam` | `chase`, `hood`, `cockpit`, `orbit` | Starting camera |
 | `lang` | `en`, `ja` | Force the UI language |
 | `touch` | `1` | Show the touch controls on a desktop |
@@ -159,7 +161,8 @@ src/
     Renderer.js         WebGL renderer, post-processing, quality scaling
     Environment.js      Sky, lighting, fog, reflections
     CameraRig.js        Camera modes
-    CarModel.js         Procedural car
+    CarSpecs.js         The two cars: shape, handling, engine
+    CarModel.js         Procedural car built from a spec
     TrackBuilder.js     Road, kerbs, barriers, start line
     Scenery.js          Terrain, trees, city, canyon
     Vegetation.js       Trees, bushes, grass and cacti built from alpha-cut cards

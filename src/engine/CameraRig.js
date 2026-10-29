@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { clamp, damp } from '../utils/MathUtils.js';
 
 const MODES = ['chase', 'hood', 'cockpit', 'orbit'];
+const DEFAULT_ONBOARD = {
+  hood: { pos: [0, 1.02, 0.95], look: [0, 0.9, 12] },
+  cockpit: { pos: [-0.36, 1.08, -0.12], look: [-0.36, 0.98, 12] }
+};
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /**
@@ -115,14 +119,11 @@ export class CameraRig {
       cam.lookAt(this._look);
       fov += clamp(speed / 80, 0, 1) * 15;
     } else if (this.mode === 'hood' || this.mode === 'cockpit') {
-      // Car space: +Z forward, +X left, driver sits on the right
-      if (this.mode === 'hood') {
-        this._pos.set(0, 1.02, 0.95);
-        this._look.set(0, 0.9, 12);
-      } else {
-        this._pos.set(-0.36, 1.08, -0.12);
-        this._look.set(-0.36, 0.98, 12);
-      }
+      // Car space: +Z forward, +X left, driver sits on the right. Each car says where its
+      // bonnet and driver's eye are (CarSpecs.js); fall back to the GT's.
+      const view = (carGroup.userData.cameras || DEFAULT_ONBOARD)[this.mode];
+      this._pos.fromArray(view.pos);
+      this._look.fromArray(view.look);
       cam.position.copy(this._pos).applyMatrix4(carGroup.matrixWorld);
       this._look.applyMatrix4(carGroup.matrixWorld);
       cam.up.set(0, 1, 0).transformDirection(carGroup.matrixWorld);
