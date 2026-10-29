@@ -77,8 +77,10 @@ const RUNOFF_LOOK = {
  * gantry) plus themed scenery, and owns their lifetime.
  */
 export class TrackBuilder {
-  constructor(scene) {
+  /** @param options.mobile  lighter scenery for phone GPUs */
+  constructor(scene, { mobile = false } = {}) {
     this.scene = scene;
+    this.mobile = mobile;
     this.group = null;
     this.path = null;
     this.def = null;
@@ -184,7 +186,7 @@ export class TrackBuilder {
     }
 
     this.buildStartLine(path, hw, wo);
-    this.scenery = buildScenery(path, def, this.group);
+    this.scenery = buildScenery(path, def, this.group, { mobile: this.mobile });
     return path;
   }
 

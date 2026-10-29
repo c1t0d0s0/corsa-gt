@@ -25,7 +25,7 @@ class CorsaApp {
     this.input = new InputManager();
     this.touch = new TouchControls(this.input, { onRecover: () => this.recover() });
     this.renderer = new RenderEngine(this.container, { mobile: this.touch.enabled });
-    this.trackBuilder = new TrackBuilder(this.renderer.scene);
+    this.trackBuilder = new TrackBuilder(this.renderer.scene, { mobile: this.touch.enabled });
     this.carModel = new CarModel();
     this.effects = new Effects(this.renderer.scene);
     this.renderer.scene.add(this.carModel.group);

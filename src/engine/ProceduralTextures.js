@@ -127,10 +127,167 @@ export function grassTextures() {
   return surfaceSet('grass', 512, {
     cells: 8, octaves: 4, grain: 0.5, bump: 2.5, seed: 23,
     shade: (n, g) => {
+      // Mottled between lush and sun-dried, with bright blade tips speckled through
       const v = 0.62 + n * 0.5 + (g - 0.5) * 0.36;
-      return [58 * v, 104 * v, 40 * v];
+      const dry = Math.max(0, n - 0.55) * 1.6;
+      const tip = g > 0.93 ? 1.25 : 1;
+      return [(58 + dry * 40) * v * tip, (104 + dry * 8) * v * tip, (40 + dry * 4) * v];
     }
   });
+}
+
+export function dirtTextures() {
+  return surfaceSet('dirt', 512, {
+    cells: 7, octaves: 5, grain: 0.45, bump: 3.2, seed: 29,
+    shade: (n, g) => {
+      const v = 0.7 + n * 0.45 + (g - 0.5) * 0.3;
+      const pebble = g > 0.97 ? 1.35 : 1;
+      return [118 * v * pebble, 96 * v * pebble, 72 * v * pebble];
+    }
+  });
+}
+
+/** Grey crag for hillsides: craggy noise with dark cracks. */
+export function stoneTextures() {
+  return surfaceSet('stone', 512, {
+    cells: 6, octaves: 6, grain: 0.15, bump: 5.0, seed: 43,
+    shade: (n, g) => {
+      const crack = Math.abs(n - 0.5) < 0.018 ? 0.5 : 1;
+      const v = (0.4 + n * 0.75 + (g - 0.5) * 0.14) * crack;
+      // Lichen greens the darker hollows
+      const moss = Math.max(0, 0.45 - n) * 1.4;
+      return [(112 - moss * 30) * v, (108 + moss * 6) * v, (96 - moss * 30) * v];
+    }
+  });
+}
+
+/** Vertically streaked bark; v runs up the trunk. */
+export function barkTextures() {
+  return surfaceSet('bark', 256, {
+    cells: 4, octaves: 4, grain: 0.25, bump: 4.5, seed: 71,
+    shade: (n, g, x, y) => {
+      // Nine furrows around the trunk, wandering with the noise; still tiles
+      const ridge = 0.5 + 0.5 * Math.sin(x * (Math.PI * 2 * 9 / 256) + n * 9);
+      const v = (0.5 + n * 0.5 + (g - 0.5) * 0.15) * (0.6 + ridge * 0.5);
+      return [92 * v, 76 * v, 62 * v];
+    }
+  });
+}
+
+/**
+ * Alpha-cut foliage cards. `kind`:
+ *  - 'leaf'   a round spray of broad leaves on twigs (broadleaf crowns)
+ *  - 'needle' a tapering conifer bough; u runs from trunk (0) to tip (1)
+ *  - 'scrub'  sparse little leaves on wiry twigs (desert bushes)
+ *  - 'grass'  a tuft of blades growing from the bottom edge
+ * Painted in light, slightly desaturated tones so instance colours can tint them.
+ */
+export function foliageTexture(kind) {
+  const key = `foliage-${kind}`;
+  if (cache.has(key)) return cache.get(key);
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const rand = mulberry32({ leaf: 101, needle: 103, scrub: 107, grass: 109 }[kind]);
+  const tone = (l, a = 1) => {
+    const k = l * (0.75 + rand() * 0.5);
+    return `rgba(${Math.min(255, 150 * k) | 0},${Math.min(255, 205 * k) | 0},${Math.min(255, 120 * k) | 0},${a})`;
+  };
+  const twig = (x0, y0, x1, y1, w) => {
+    ctx.strokeStyle = kind === 'scrub' ? 'rgb(150,140,118)' : 'rgb(74,58,44)';
+    ctx.lineWidth = w;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.quadraticCurveTo((x0 + x1) / 2 + (rand() - 0.5) * 20, (y0 + y1) / 2 + (rand() - 0.5) * 20, x1, y1);
+    ctx.stroke();
+  };
+  const leaf = (x, y, len, wid, ang, l) => {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(ang);
+    ctx.fillStyle = tone(l);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(len * 0.5, -wid, len, 0);
+    ctx.quadraticCurveTo(len * 0.5, wid, 0, 0);
+    ctx.fill();
+    // Midrib catches the light
+    ctx.strokeStyle = 'rgba(255,255,230,0.25)';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(len * 0.9, 0);
+    ctx.stroke();
+    ctx.restore();
+  };
+
+  if (kind === 'leaf' || kind === 'scrub') {
+    const scrub = kind === 'scrub';
+    const cx = size / 2;
+    const cy = size / 2;
+    // Twigs radiate from the centre; leaves cluster along and around them
+    const tips = [];
+    const twigs = scrub ? 14 : 9;
+    for (let i = 0; i < twigs; i++) {
+      const a = (i / twigs) * Math.PI * 2 + rand() * 0.5;
+      const r = size * (0.3 + rand() * 0.16);
+      tips.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+      twig(cx, cy, tips[i][0], tips[i][1], scrub ? 2.2 : 3);
+    }
+    const count = scrub ? 700 : 520;
+    for (let i = 0; i < count; i++) {
+      const t = tips[Math.floor(rand() * tips.length)];
+      const f = Math.sqrt(rand());
+      const x = cx + (t[0] - cx) * f + (rand() - 0.5) * 34;
+      const y = cy + (t[1] - cy) * f + (rand() - 0.5) * 34;
+      // Shade deeper towards the middle so the card has some volume
+      const edge = Math.hypot(x - cx, y - cy) / (size * 0.45);
+      const len = scrub ? 6 + rand() * 6 : 11 + rand() * 9;
+      leaf(x, y, len, len * (scrub ? 0.28 : 0.42), rand() * Math.PI * 2, 0.62 + edge * 0.5);
+    }
+  } else if (kind === 'needle') {
+    // Bough along +u with side shoots; outline tapers to the tip
+    const mid = size / 2;
+    twig(0, mid, size * 0.97, mid, 3.5);
+    for (let i = 0; i < 1600; i++) {
+      const u = rand();
+      const reach = (1 - u) * 0.85 + 0.15;
+      const side = rand() < 0.5 ? -1 : 1;
+      const x = u * size * 0.95;
+      const y = mid + side * rand() * reach * size * 0.42;
+      const ang = side * (0.5 + rand() * 0.5);
+      ctx.strokeStyle = tone(0.38 + rand() * 0.4);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(ang) * 9, y + Math.sin(ang) * 9);
+      ctx.stroke();
+    }
+    for (let i = 0; i < 7; i++) {
+      const u = 0.12 + i * 0.12;
+      for (const side of [-1, 1]) {
+        twig(u * size, mid, (u + 0.12) * size, mid + side * (1 - u) * size * 0.36, 1.6);
+      }
+    }
+  } else if (kind === 'grass') {
+    for (let i = 0; i < 150; i++) {
+      const x0 = size * (0.12 + rand() * 0.76);
+      const h = size * (0.45 + rand() * 0.53);
+      const lean = (rand() - 0.5) * size * 0.4;
+      const w = 2 + rand() * 3.5;
+      ctx.fillStyle = tone(0.5 + rand() * 0.55);
+      ctx.beginPath();
+      ctx.moveTo(x0 - w, size);
+      ctx.quadraticCurveTo(x0 + lean * 0.3, size - h * 0.6, x0 + lean, size - h);
+      ctx.quadraticCurveTo(x0 + lean * 0.3 + w * 0.4, size - h * 0.6, x0 + w, size);
+      ctx.fill();
+    }
+  }
+  const tex = finish(c, { repeat: false });
+  cache.set(key, tex);
+  return tex;
 }
 
 export function sandTextures() {
