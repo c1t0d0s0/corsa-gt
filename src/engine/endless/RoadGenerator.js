@@ -4,6 +4,11 @@ import { BiomeSchedule, hashSeed } from './Biomes.js';
 export const ROAD_HALF_WIDTH = 4; // two 3.5 m lanes plus edge lines
 export const SEA_LEVEL = 0;
 export const RIVER_DEPTH = 3.4; // channel depth below the banks
+export const RIVER_PLAIN = 1.0; // the banks are levelled this far below the road
+export const RIVER_FREEBOARD = 1.0; // the water surface sits this far below the banks
+// Where that surface meets the bank, metres from the centre line at normal width:
+// where the channel profile in groundHeight has dropped RIVER_FREEBOARD
+export const RIVER_WATERLINE = 10.1;
 
 const LOOKAHEAD = 220; // metres of terrain the road's grade looks ahead at
 const EASE = 40; // half-window of the curvature moving average
@@ -160,6 +165,14 @@ export class RoadGenerator {
    * riverside stretch fades out the river swings away into the distance
    * rather than stopping.
    */
+  /**
+   * How wide the river is here, as a multiple of its usual ~18 m: it widens
+   * into slow pools and narrows through runs, so it never reads as a canal.
+   */
+  riverWidth(s) {
+    return 1 + 0.22 * Math.sin(s / 97 + 0.7) + 0.12 * Math.sin(s / 41 + 2.1);
+  }
+
   riverOffset(s, p) {
     return p.riverSide * (33 + Math.sin(s / 210) * 7 + Math.sin(s / 77 + 1) * 4 + (1 - p.river) * 300);
   }
@@ -188,24 +201,34 @@ export class RoadGenerator {
   /**
    * Final ground height: level with the road along it, blending into the
    * natural ground over the next ~50 m (cuttings and embankments), with the
-   * river channel carved in. `t` is a terrain query (EndlessPath.terrainQuery):
-   * side for the natural ground, and near/offset/y/roadS for the road close by.
+   * river's valley floor levelled and its channel carved in. `t` is a terrain
+   * query (EndlessPath.terrainQuery): side for the natural ground, and
+   * near/offset/y/roadS for the road close by.
    */
-  groundHeight(x, z, t, p, carve = true) {
+  groundHeight(x, z, t, p) {
     const n = this.naturalHeight(x, z, p, t.side);
     if (!t.near) return n;
     const f = smoothstep(ROAD_HALF_WIDTH + 3, ROAD_HALF_WIDTH + 50, Math.abs(t.offset));
     let g = t.y - 0.06 + (n - t.y + 0.06) * f;
-    if (carve && p.river > 0.02) {
-      const d = Math.abs(t.offset - this.riverOffset(t.roadS, p));
-      g -= RIVER_DEPTH * smoothstep(0.02, 0.2, p.river) * (1 - smoothstep(5, 13, d));
+    if (p.river > 0.02) {
+      // Both banks are levelled to one height (RIVER_PLAIN below the road) before the channel is
+      // cut, so the water (riverLevel) meets them at the same waterline on either side
+      const d = Math.abs(t.offset - this.riverOffset(t.roadS, p)) / this.riverWidth(t.roadS);
+      const k = smoothstep(0.02, 0.12, p.river);
+      g += (t.y - RIVER_PLAIN - g) * k * (1 - smoothstep(14, 26, d));
+      g -= RIVER_DEPTH * k * (1 - smoothstep(5, 13, d));
     }
     return g;
   }
 
+  /** Height of the river's surface beside road height `roadY`. */
+  riverLevel(roadY) {
+    return roadY - RIVER_PLAIN - RIVER_FREEBOARD;
+  }
+
   /** Whether a point (terrain query `t`, ground height `ground`) is under water. */
   inWater(t, ground, p) {
-    if (t.near && p.river > 0.3 && Math.abs(t.offset - this.riverOffset(t.roadS, p)) < 7) return true;
+    if (t.near && p.river > 0.3 && Math.abs(t.offset - this.riverOffset(t.roadS, p)) < 7 * this.riverWidth(t.roadS)) return true;
     return p.sea > 0.05 && ground < SEA_LEVEL - 0.3;
   }
 }

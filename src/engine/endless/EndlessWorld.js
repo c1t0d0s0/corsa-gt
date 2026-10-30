@@ -8,8 +8,8 @@ import {
   broadleafModel, coniferModel, bushModel, tuftModel, cactusGeometry, foliageMaterial, barkMaterial, tickWind
 } from '../Vegetation.js';
 import { endlessTerrainMaterial } from './TerrainMaterial.js';
-import { waterMaterial, tickWater } from './Water.js';
-import { SEA_LEVEL, RIVER_DEPTH } from './RoadGenerator.js';
+import { waterMaterial, riverMaterial, tickWater } from './Water.js';
+import { SEA_LEVEL, RIVER_WATERLINE } from './RoadGenerator.js';
 
 const CHUNK = 256; // metres of road per road mesh
 const TILE = 256; // terrain tile size
@@ -77,7 +77,7 @@ export class EndlessWorld {
     this.postMat = new THREE.MeshStandardMaterial({ color: 0x8a8f96, metalness: 0.5, roughness: 0.5 });
     this.terrainMat = endlessTerrainMaterial();
     this.seaMat = waterMaterial({ color: 0x1b4a63, opacity: 0.92 });
-    this.riverMat = waterMaterial({ color: 0x2c4a3a, opacity: 0.88 });
+    this.riverMat = riverMaterial();
 
     this.plants = {
       broadleaf: broadleafModel(11),
@@ -276,23 +276,25 @@ export class EndlessWorld {
     const gen = this.gen;
     const pos = [];
     const uv = [];
+    const flow = []; // metres across, metres along (wrapped), half width: see riverMaterial
     let any = false;
     const step = 4;
     for (let k = from; k <= to; k += step) {
       const i = Math.min(k, to) % path.n;
       const s = path.sAbs[i];
       const p = gen.paramsCached(s);
-      if (p.river > 0.02) any = true;
+      if (p.river > 0.12) any = true;
       const ro = gen.riverOffset(s, p);
-      const centre = path.pointAt(i, ro);
-      // Water sits below the banks: the uncarved ground at the river's centre
-      const t = path.terrainQuery(centre.x, centre.z, this.near);
-      const bank = gen.groundHeight(centre.x, centre.z, t, gen.paramsCached(t.sAbs), false);
-      const y = bank - RIVER_DEPTH * 0.45 - origin.y;
-      for (const w of [-9, 9]) {
+      const y = gen.riverLevel(path.py[i]) - origin.y;
+      // Reach just past the waterline; the shader fades the edge into the bank. Where the river
+      // is only half cut (fading out, far off the road) there's no water, so pinch the strip shut.
+      const half = p.river > 0.12 ? (RIVER_WATERLINE + 0.5) * gen.riverWidth(s) : 0.01;
+      const along = (from % 2048) + (Math.min(k, to) - from);
+      for (const w of [-half, half]) {
         const q = path.pointAt(i, ro + w);
         pos.push(q.x - origin.x, y, q.z - origin.z);
         uv.push(q.x - origin.x, q.z - origin.z);
+        flow.push(w, along, half);
       }
     }
     if (!any) return null;
@@ -305,6 +307,7 @@ export class EndlessWorld {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('aRiver', new THREE.Float32BufferAttribute(flow, 3));
     geo.setIndex(index);
     geo.computeVertexNormals();
     // Strips wind with the river; make sure they face up
@@ -333,7 +336,7 @@ export class EndlessWorld {
 
   /** Is `s` (a sample) within reach of the river? */
   byRiver(s, distance) {
-    return s.near && s.p.river > 0.02 && Math.abs(s.offset - this.gen.riverOffset(s.roadS, s.p)) < distance;
+    return s.near && s.p.river > 0.02 && Math.abs(s.offset - this.gen.riverOffset(s.roadS, s.p)) < distance * this.gen.riverWidth(s.roadS);
   }
 
   *buildTile(tx, tz, fine) {
@@ -454,13 +457,15 @@ export class EndlessWorld {
       grass *= 1 - beach;
       wet = smoothstep(1.4, 0.2, h - SEA_LEVEL) * p.sea;
     }
-    // Pebbly river banks
+    // River banks: grass right down to a narrow, uneven strip of gravel at the waterline, dark and
+    // wet where the water laps it
     if (smp.near && p.river > 0.02) {
-      const d = Math.abs(smp.offset - this.gen.riverOffset(smp.roadS, p));
-      const bank = smoothstep(16, 8, d);
-      dirt += bank * 0.8;
-      sand += bank * 0.6;
-      grass *= 1 - bank * 0.7;
+      const d = Math.abs(smp.offset - this.gen.riverOffset(smp.roadS, p)) / this.gen.riverWidth(smp.roadS) - RIVER_WATERLINE;
+      const gravel = smoothstep(0.8, -0.6, d) * (0.6 + 0.6 * fbm(x / 9 + 3, z / 9 + 1, 2, 41));
+      dirt += gravel * 0.45;
+      sand += gravel * 0.9;
+      grass *= 1 - Math.min(1, gravel) * 0.85;
+      wet = Math.max(wet, smoothstep(0.6, -0.6, d));
     }
     // Worn verge right by the road
     dirt += smoothstep(this.path.halfWidth + 3, this.path.halfWidth + 1, off) * 0.3;
@@ -484,10 +489,11 @@ export class EndlessWorld {
       const hz = this.sample(x, z + 2, {}).h;
       return Math.hypot(hx - h, hz - h) / 2;
     };
-    const ok = (s, clear) => {
+    // `river`: how close to the river's centre line it may grow (the waterline is RIVER_WATERLINE out)
+    const ok = (s, clear, river = RIVER_WATERLINE + 2) => {
       if (Math.abs(s.offset) < hw + clear) return false;
       if (s.p.sea > 0.05 && s.h < SEA_LEVEL + 2.5) return false;
-      if (this.byRiver(s, 11)) return false;
+      if (this.byRiver(s, river)) return false;
       return true;
     };
 
@@ -535,7 +541,7 @@ export class EndlessWorld {
         const p = this.gen.paramsCached(t.sAbs);
         if (r1 > p.tufts * 0.55 * d) continue;
         const s = this.sample(ox + lx, oz + lz, smp);
-        if (!ok(s, 1.2)) continue;
+        if (!ok(s, 1.2, RIVER_WATERLINE + 0.4)) continue; // grass grows right down to the water
         const sc = 0.45 + r2 * 0.6;
         lists.tuft.push({ x: lx, y: s.h - 0.03, z: lz, sx: sc * 1.3, sy: sc * (0.6 + r1), sz: sc * 1.3, ry: r2 * 6.3, tint: r2, dry: p.dry });
       }
