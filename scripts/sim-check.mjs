@@ -211,6 +211,35 @@ function checkEndlessLayout(seed, km) {
   return hash;
 }
 
+/**
+ * The endless road's terrain is fixed by the seed: sampling the same spots
+ * again after driving on (road added ahead, old road dropped behind) must
+ * give the same ground, or coastlines and hills visibly shift as tiles rebuild.
+ */
+function checkEndlessTerrain(seed) {
+  const path = new EndlessPath(seed);
+  const gen = path.generator;
+  const height = (x, z) => { const t = path.terrainQuery(x, z, {}); return gen.groundHeight(x, z, t, gen.paramsCached(t.sAbs)); };
+  const driveTo = (abs) => { for (let a = Math.max(path.startS, abs - 2000); a <= abs; a += 100) { while (path.head <= a) path.extendTo(path.head + 256); path.update(a % path.n); } };
+  let worst = 0, total = 0;
+  for (let c = 4000; c <= 30000; c += 6500) {
+    driveTo(c);
+    const [cx, cz] = [path.dx[c % path.n], path.dz[c % path.n]];
+    const pts = [];
+    for (let x = -2200; x <= 2200; x += 150) for (let z = -2200; z <= 2200; z += 150) if (Math.hypot(x, z) < 2200) pts.push([cx + x, cz + z]);
+    const before = pts.map(([x, z]) => height(x, z));
+    driveTo(c + 1000);
+    const [nx, nz] = [path.dx[(c + 1000) % path.n], path.dz[(c + 1000) % path.n]];
+    pts.forEach(([x, z], i) => {
+      if (Math.hypot(x - nx, z - nz) > 2200) return; // only what is still in view
+      total++;
+      worst = Math.max(worst, Math.abs(height(x, z) - before[i]));
+    });
+  }
+  console.log(`  terrain "${seed}": ${total} spots re-sampled after driving on, worst change ${worst.toFixed(3)}m`);
+  if (worst > 0.001) fail(`endless "${seed}": terrain shifts as the road streams (${worst.toFixed(2)} m)`);
+}
+
 /** Autopilot cruising the endless road: stays in its lane at a relaxed pace. */
 function runEndless(seed, km, weather) {
   const path = new EndlessPath(seed);
@@ -238,6 +267,7 @@ console.log('\n== ENDLESS ROAD');
 const hashes = ['alpha', 'alpha', 'pine-4821', 'coast'].map((seed) => checkEndlessLayout(seed, 50));
 if (hashes[0] !== hashes[1]) fail('endless: same seed gave a different road');
 if (hashes[0] === hashes[2]) fail('endless: different seeds gave the same road');
+for (const seed of ['alpha', 'coast']) checkEndlessTerrain(seed);
 for (const seed of ['alpha', 'pine-4821']) runEndless(seed, 20, 'clear');
 runEndless('coast', 10, 'rainy');
 

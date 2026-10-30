@@ -3,13 +3,15 @@ import { RoadGenerator, ROAD_HALF_WIDTH } from './RoadGenerator.js';
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-const CAPACITY = 8192; // metres of road held at once
+const CAPACITY = 16384; // metres of road held at once
 const AHEAD = 3200; // keep at least this much generated in front of the car
 const BEHIND = 1200; // never overwrite road this close behind the car
 const START = 400; // the car starts this far along, so there is road behind it too
-const CELL = 64; // nearest-road grid
+// Road is held for this far either side of the car along the overall direction:
+// the scenery's reach (2.2 km) plus NEAR, so every terrain query finds the road it needs
+const U_MARGIN = 2700;
+const NEAR = 400; // the road counts as "near" a point within this distance
 const RAIL_HOLD = 30; // a guardrail runs on this far past the hazard
-const cellKey = (x, z) => (Math.floor(x / CELL) + 32768) * 65536 + (Math.floor(z / CELL) + 32768);
 
 export const ENDLESS_DEF = {
   id: 'endless',
@@ -32,6 +34,13 @@ export const ENDLESS_DEF = {
  * position (it wraps every n metres). `sAbs[slot]` holds the real distance.
  * There are no walls: `endless` tells Physics to use `groundAt` and to bring
  * the car back when it strays too far instead.
+ *
+ * The road always heads within 75° of the generator's overall direction, so
+ * its position `u` along that direction only ever increases: for any point
+ * there is exactly one stretch of road "level with it". The terrain hangs off
+ * that (see terrainQuery), never off whatever road happens to be held, so the
+ * ground anywhere is fixed by the seed and doesn't shift as road is added
+ * ahead and dropped behind.
  */
 export class EndlessPath {
   constructor(seed) {
@@ -59,8 +68,12 @@ export class EndlessPath {
     this.kerb = new Uint8Array(n);
     this.rail = new Uint8Array(n); // guardrail on the left (1) / right (2)
     this.railHold = [0, 0];
-    this.grid = new Map(); // cell → absolute indices of every other sample in it
     this.sAbs = new Float64Array(n);
+    // Position along / across the overall direction (left positive)
+    const dir = this.generator.direction;
+    this.axis = { ux: Math.sin(dir), uz: Math.cos(dir), vx: Math.cos(dir), vz: -Math.sin(dir) };
+    this.dirU = new Float64Array(n);
+    this.dirV = new Float64Array(n);
     // Positions in double precision: float32 loses centimetres tens of km out
     this.dx = new Float64Array(n);
     this.dz = new Float64Array(n);
@@ -69,6 +82,7 @@ export class EndlessPath {
 
     this.extendTo(START + AHEAD);
     this.startS = START % n;
+    this.update(this.startS);
   }
 
   /** Generate road up to absolute distance `abs`. */
@@ -88,19 +102,10 @@ export class EndlessPath {
       this.slope[i] = smp.slope;
       this.curv[i] = smp.curv;
       this.sAbs[i] = smp.s;
+      this.dirU[i] = smp.x * this.axis.ux + smp.z * this.axis.uz;
+      this.dirV[i] = smp.x * this.axis.vx + smp.z * this.axis.vz;
       this.rail[i] = this.railsAt(smp);
-      if (smp.s % 2 === 0) {
-        const key = cellKey(smp.x, smp.z);
-        if (!this.grid.has(key)) this.grid.set(key, []);
-        this.grid.get(key).push(smp.s);
-      }
       this.head++;
-    }
-    // Forget overwritten road
-    const tail = this.tail;
-    for (const [key, list] of this.grid) {
-      if (list[list.length - 1] < tail) this.grid.delete(key);
-      else if (list[0] < tail) this.grid.set(key, list.filter((k) => k >= tail));
     }
   }
 
@@ -113,7 +118,7 @@ export class EndlessPath {
       const off = side * (this.halfWidth + 18);
       const x = smp.x + Math.cos(smp.heading) * off;
       const z = smp.z - Math.sin(smp.heading) * off;
-      const drop = smp.y - g.groundHeight(x, z, smp.y, off, p, smp.s);
+      const drop = smp.y - g.groundHeight(x, z, { side: off, near: true, offset: off, y: smp.y, roadS: smp.s }, p);
       const hazard = (p.sea > 0.5 && side === p.seaSide) || (p.river > 0.5 && side === p.riverSide) || drop > 4;
       if (hazard) this.railHold[k] = RAIL_HOLD;
       if (this.railHold[k] > 0) {
@@ -129,15 +134,46 @@ export class EndlessPath {
     return this.rail[index] & (offset > 0 ? 1 : 2) ? this.halfWidth + 0.9 : Infinity;
   }
 
-  /**
-   * Nearest road to any point (not just near the car): grid search close to
-   * the road, a coarse scan further away. Fills `out` with index, offset, y
-   * (road height there) and sAbs.
-   */
-  nearest(x, z, out = {}) {
+  /** Latest sample (absolute index) at or before position `u` along the overall direction. */
+  absAtU(u) {
+    let lo = this.tail;
+    let hi = this.head - 1;
+    if (u <= this.dirU[lo % this.n]) return lo;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.dirU[mid % this.n] <= u) lo = mid; else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  /** The road level with (x, z): its distance and the point's sideways offset from it. */
+  graphAt(x, z, out) {
     const n = this.n;
-    const tail = this.tail;
-    let best = -1;
+    const u = x * this.axis.ux + z * this.axis.uz;
+    const v = x * this.axis.vx + z * this.axis.vz;
+    const k = this.absAtU(u);
+    const i = k % n;
+    const j = Math.min(k + 1, this.head - 1) % n;
+    const t = j === i ? 0 : Math.min(1, Math.max(0, (u - this.dirU[i]) / (this.dirU[j] - this.dirU[i])));
+    out.sAbs = k + t;
+    out.side = v - (this.dirV[i] + (this.dirV[j] - this.dirV[i]) * t);
+    return u;
+  }
+
+  /**
+   * Everything the terrain needs at a point, as a pure function of the seed:
+   *  - sAbs, side: the road level with the point (landscape, which side the sea is)
+   *  - near: whether the road passes within NEAR m; if so offset (true sideways
+   *    distance), y (road height) and roadS of the closest road, for the road bed
+   *    and the river. Only road level with the point ±NEAR can be that close, and
+   *    update() keeps all of that held.
+   */
+  terrainQuery(x, z, out = {}) {
+    const n = this.n;
+    const u = this.graphAt(x, z, out);
+    const lo = this.absAtU(u - NEAR);
+    const hi = Math.min(this.head - 1, this.absAtU(u + NEAR) + 1);
+    let best = lo;
     let bestD = Infinity;
     const test = (k) => {
       const i = k % n;
@@ -146,49 +182,40 @@ export class EndlessPath {
       const d = dx * dx + dz * dz;
       if (d < bestD) { bestD = d; best = k; }
     };
-    const gx = Math.floor(x / CELL);
-    const gz = Math.floor(z / CELL);
-    for (let r = 0; r <= 3; r++) {
-      for (let cx = gx - r; cx <= gx + r; cx++) {
-        for (let cz = gz - r; cz <= gz + r; cz++) {
-          if (Math.max(Math.abs(cx - gx), Math.abs(cz - gz)) !== r) continue;
-          const list = this.grid.get((cx + 32768) * 65536 + (cz + 32768));
-          if (list) for (const k of list) if (k >= tail) test(k);
-        }
-      }
-      // Anything in an unsearched cell is at least r cells away
-      if (best >= 0 && bestD <= (r * CELL) ** 2) break;
-    }
-    if (best < 0 || bestD > (3 * CELL) ** 2) {
-      for (let k = tail; k < this.head; k += 8) test(k);
-    }
-    // Refine between the coarse samples
+    for (let k = lo; k <= hi; k += 4) test(k);
     const c = best;
-    for (let k = Math.max(tail, c - 8); k <= Math.min(this.head - 1, c + 8); k++) test(k);
-
+    for (let k = Math.max(lo, c - 4); k <= Math.min(hi, c + 4); k++) test(k);
+    out.near = bestD <= NEAR * NEAR;
     const i = best % n;
-    const dx = x - this.dx[i];
-    const dz = z - this.dz[i];
-    const along = dx * this.tx[i] + dz * this.tz[i];
+    if (out.near) {
+      const dx = x - this.dx[i];
+      const dz = z - this.dz[i];
+      const along = Math.max(-1, Math.min(1, dx * this.tx[i] + dz * this.tz[i]));
+      out.offset = dx * this.tz[i] - dz * this.tx[i];
+      out.y = this.py[i] + this.slope[i] * along;
+      out.roadS = best + along;
+    } else {
+      out.offset = out.side;
+      out.y = this.py[i];
+      out.roadS = out.sAbs;
+    }
     out.index = i;
-    out.sAbs = best + along;
-    out.offset = dx * this.tz[i] - dz * this.tx[i];
-    out.y = this.py[i] + this.slope[i] * Math.max(-1, Math.min(1, along));
     return out;
   }
 
-  /** Ground height anywhere, from the nearest road. */
-  groundAtPoint(x, z, near = this.nearest(x, z, {})) {
-    const p = this.generator.paramsAt(near.sAbs, this._p);
-    return this.generator.groundHeight(x, z, near.y, near.offset, p, near.sAbs);
-  }
-
-  /** Keep road generated ahead of the slot the car is in. Returns true if it grew. */
+  /** Keep road held for the car's surroundings. Returns true if it grew. */
   update(index) {
     const carAbs = this.sAbs[index];
-    if (this.head - carAbs >= AHEAD) return false;
-    this.extendTo(Math.min(carAbs + AHEAD + 512, carAbs + this.n - BEHIND));
-    return true;
+    const carU = this.dirU[index];
+    // Hold road back to U_MARGIN behind (but always leave room to generate ahead)
+    const keepFrom = Math.min(carAbs - BEHIND, Math.max(this.absAtU(carU - U_MARGIN), carAbs + AHEAD + 512 - this.n));
+    const limit = keepFrom + this.n;
+    let grew = false;
+    while (this.head < limit && (this.head - carAbs < AHEAD || this.dirU[(this.head - 1) % this.n] < carU + U_MARGIN)) {
+      this.extendTo(Math.min(limit, this.head + 256));
+      grew = true;
+    }
+    return grew;
   }
 
   /** Oldest absolute distance still held. */
@@ -272,15 +299,26 @@ export class EndlessPath {
     return this.generator.paramsAt(this.sAbs[index], out);
   }
 
-  /** Ground under (x, z) given a query result near it. */
-  groundAt(x, z, q) {
-    const p = this.paramsAt(q.index);
-    return this.generator.groundHeight(x, z, q.y, q.offset, p, this.sAbs[q.index]);
+  /** Terrain query for a point near the car, reusing Physics' road query for the near part. */
+  carTerrain(x, z, q) {
+    const t = this._t || (this._t = {});
+    this.graphAt(x, z, t);
+    t.near = true;
+    t.offset = q.offset;
+    t.y = q.y;
+    t.roadS = this.sAbs[q.index];
+    return t;
   }
 
-  inWater(q, ground) {
-    const p = this.paramsAt(q.index);
-    return this.generator.inWater(q.offset, ground, p, this.sAbs[q.index]);
+  /** Ground under (x, z) given Physics' query result there; matches the terrain mesh. */
+  groundAt(x, z, q) {
+    const t = this.carTerrain(x, z, q);
+    return this.generator.groundHeight(x, z, t, this.generator.paramsCached(t.sAbs));
+  }
+
+  inWater(x, z, q, ground) {
+    const t = this.carTerrain(x, z, q);
+    return this.generator.inWater(t, ground, this.generator.paramsCached(t.sAbs));
   }
 
   /** What the car drives on off the tarmac here. */

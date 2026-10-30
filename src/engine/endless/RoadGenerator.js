@@ -127,7 +127,7 @@ export class RoadGenerator {
     const curv = this.windowSum / this.window.length;
     const s = this.planS++;
     const p = this.schedule.paramsAt(s, this._p);
-    let target = this.naturalHeight(this.x, this.z, p, 0, s);
+    let target = this.naturalHeight(this.x, this.z, p, 0);
     // Never below the sea (mountain valleys can dip under it); by the coast stay up on the shoreline
     target = Math.max(target, 3);
     target = target + (Math.max(target, 6) - target) * p.sea;
@@ -165,21 +165,21 @@ export class RoadGenerator {
   }
 
   /**
-   * Untouched ground at (x, z), given the landscape at the nearest road
-   * sample (`p`, at distance `s`) and the lateral offset from it.
+   * Untouched ground at (x, z), given the landscape of the road level with it
+   * (`p`) and how far to the side of that road it lies (`side`, left positive).
    */
-  naturalHeight(x, z, p, offset, s) {
+  naturalHeight(x, z, p, side) {
     // Value-noise fbm bunches around 0.5; stretch it to use the full range
     const n = smoothstep(0.2, 0.8, fbm(x / p.scale + 31.7, z / p.scale + 17.3, 5, this.noiseSeed));
     let h = p.base + (n - 0.5) * 2 * p.amp;
     // Hills (or, in the mountains, ridged peaks) rise away from the road, which keeps to the valley floor
     const r = smoothstep(0.25, 0.75, fbm(x / 1300 + 5.1, z / 1300 + 9.7, 5, this.noiseSeed + 3));
     const ridged = (1 - Math.abs(r * 2 - 1)) ** 2;
-    const valley = smoothstep(60, 700, Math.abs(offset));
+    const valley = smoothstep(60, 700, Math.abs(side));
     h += p.relief * (r + (ridged - r) * p.sharp) * valley;
     // The coast falls away under the sea on one side
     if (p.sea > 0) {
-      const d = offset * p.seaSide;
+      const d = side * p.seaSide;
       h -= p.sea * smoothstep(18, 160, d) * (h + 24);
     }
     return h;
@@ -188,22 +188,24 @@ export class RoadGenerator {
   /**
    * Final ground height: level with the road along it, blending into the
    * natural ground over the next ~50 m (cuttings and embankments), with the
-   * river channel carved in.
+   * river channel carved in. `t` is a terrain query (EndlessPath.terrainQuery):
+   * side for the natural ground, and near/offset/y/roadS for the road close by.
    */
-  groundHeight(x, z, roadY, offset, p, s, carve = true) {
-    const n = this.naturalHeight(x, z, p, offset, s);
-    const f = smoothstep(ROAD_HALF_WIDTH + 3, ROAD_HALF_WIDTH + 50, Math.abs(offset));
-    let g = roadY - 0.06 + (n - roadY + 0.06) * f;
+  groundHeight(x, z, t, p, carve = true) {
+    const n = this.naturalHeight(x, z, p, t.side);
+    if (!t.near) return n;
+    const f = smoothstep(ROAD_HALF_WIDTH + 3, ROAD_HALF_WIDTH + 50, Math.abs(t.offset));
+    let g = t.y - 0.06 + (n - t.y + 0.06) * f;
     if (carve && p.river > 0.02) {
-      const d = Math.abs(offset - this.riverOffset(s, p));
+      const d = Math.abs(t.offset - this.riverOffset(t.roadS, p));
       g -= RIVER_DEPTH * smoothstep(0.02, 0.2, p.river) * (1 - smoothstep(5, 13, d));
     }
     return g;
   }
 
-  /** Whether a point at `offset` with ground height `ground` is under water. */
-  inWater(offset, ground, p, s) {
-    if (p.river > 0.3 && Math.abs(offset - this.riverOffset(s, p)) < 7) return true;
+  /** Whether a point (terrain query `t`, ground height `ground`) is under water. */
+  inWater(t, ground, p) {
+    if (t.near && p.river > 0.3 && Math.abs(t.offset - this.riverOffset(t.roadS, p)) < 7) return true;
     return p.sea > 0.05 && ground < SEA_LEVEL - 0.3;
   }
 }

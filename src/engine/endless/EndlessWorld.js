@@ -25,7 +25,7 @@ const tileKey = (tx, tz) => `${tx},${tz}`;
  * Streams the endless road's world around the car: road meshes per 256 m
  * stretch as the road is generated, and terrain tiles on a world grid (fine
  * near the car, coarse further out, with skirts hiding the cracks between),
- * dressed with the plants of whatever landscape the nearest road is in.
+ * dressed with the plants of whatever landscape the road beside it is in.
  *
  * Everything is built from the seed and world position only, so a tile looks
  * the same whenever it is built. Building is spread over frames within a
@@ -104,8 +104,7 @@ export class EndlessWorld {
 
   /** Build what's missing near `focus`, drop what's far away. */
   update(focus, dt = 0, budget = BUDGET_MS) {
-    const near = this.path.nearest(focus.x, focus.z, this.near);
-    this.carAbs = near.sAbs;
+    this.carAbs = this.path.terrainQuery(focus.x, focus.z, this.near).roadS;
     this.focus = focus;
     // Snap so the sea's ripples (world-space) don't swim
     this.sea.position.x = Math.round(focus.x / 64) * 64;
@@ -287,7 +286,8 @@ export class EndlessWorld {
       const ro = gen.riverOffset(s, p);
       const centre = path.pointAt(i, ro);
       // Water sits below the banks: the uncarved ground at the river's centre
-      const bank = gen.groundHeight(centre.x, centre.z, path.py[i], ro, p, s, false);
+      const t = path.terrainQuery(centre.x, centre.z, this.near);
+      const bank = gen.groundHeight(centre.x, centre.z, t, gen.paramsCached(t.sAbs), false);
       const y = bank - RIVER_DEPTH * 0.45 - origin.y;
       for (const w of [-9, 9]) {
         const q = path.pointAt(i, ro + w);
@@ -315,15 +315,25 @@ export class EndlessWorld {
 
   // --- Terrain ---------------------------------------------------------------
 
-  /** Ground height, splat weights and so on at a world point. */
+  /**
+   * Ground height and what's needed to dress it at a world point. Depends on
+   * the seed and position only (see EndlessPath.terrainQuery), so a tile comes
+   * out the same whenever it's built.
+   */
   sample(x, z, out) {
-    const near = this.path.nearest(x, z, this.near);
-    const p = this.gen.paramsCached(near.sAbs);
-    out.h = this.gen.groundHeight(x, z, near.y, near.offset, p, near.sAbs);
-    out.offset = near.offset;
-    out.sAbs = near.sAbs;
+    const t = this.path.terrainQuery(x, z, this.near);
+    const p = this.gen.paramsCached(t.sAbs);
+    out.h = this.gen.groundHeight(x, z, t, p);
+    out.offset = t.offset; // sideways from the closest road (or the road level with it, when far)
+    out.near = t.near;
+    out.roadS = t.roadS;
     out.p = p;
     return out;
+  }
+
+  /** Is `s` (a sample) within reach of the river? */
+  byRiver(s, distance) {
+    return s.near && s.p.river > 0.02 && Math.abs(s.offset - this.gen.riverOffset(s.roadS, s.p)) < distance;
   }
 
   *buildTile(tx, tz, fine) {
@@ -445,8 +455,8 @@ export class EndlessWorld {
       wet = smoothstep(1.4, 0.2, h - SEA_LEVEL) * p.sea;
     }
     // Pebbly river banks
-    if (p.river > 0.02) {
-      const d = Math.abs(smp.offset - this.gen.riverOffset(smp.sAbs, p));
+    if (smp.near && p.river > 0.02) {
+      const d = Math.abs(smp.offset - this.gen.riverOffset(smp.roadS, p));
       const bank = smoothstep(16, 8, d);
       dirt += bank * 0.8;
       sand += bank * 0.6;
@@ -477,7 +487,7 @@ export class EndlessWorld {
     const ok = (s, clear) => {
       if (Math.abs(s.offset) < hw + clear) return false;
       if (s.p.sea > 0.05 && s.h < SEA_LEVEL + 2.5) return false;
-      if (s.p.river > 0.02 && Math.abs(s.offset - this.gen.riverOffset(s.sAbs, s.p)) < 11) return false;
+      if (this.byRiver(s, 11)) return false;
       return true;
     };
 
@@ -520,9 +530,9 @@ export class EndlessWorld {
         const lz = gz + rand() * 4;
         const r1 = rand();
         const r2 = rand();
-        const near = this.path.nearest(ox + lx, oz + lz, this.near);
-        if (Math.abs(near.offset) > 160) continue;
-        const p = this.gen.paramsCached(near.sAbs);
+        const t = this.path.terrainQuery(ox + lx, oz + lz, this.near);
+        if (Math.abs(t.offset) > 160) continue;
+        const p = this.gen.paramsCached(t.sAbs);
         if (r1 > p.tufts * 0.55 * d) continue;
         const s = this.sample(ox + lx, oz + lz, smp);
         if (!ok(s, 1.2)) continue;

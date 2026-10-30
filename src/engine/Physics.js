@@ -567,7 +567,7 @@ export class VehiclePhysics {
       this.position.y = t.groundAt(this.position.x, this.position.z, q);
       // Strayed too far or into water: ask the game to put the car back
       this.offRoadTime = Math.abs(q.offset) > t.recoverOffset ? this.offRoadTime + dt : 0;
-      if (this.offRoadTime > 1.5 || Math.abs(q.offset) > t.recoverOffset * 2 || t.inWater(q, this.position.y)) {
+      if (this.offRoadTime > 1.5 || Math.abs(q.offset) > t.recoverOffset * 2 || t.inWater(this.position.x, this.position.z, q, this.position.y)) {
         this.needsRecover = true;
       }
     } else {
