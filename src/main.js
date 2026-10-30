@@ -61,6 +61,7 @@ class CorsaApp {
     this.paused = false;
     this.cameraBeforeGarage = null;
     this.recovering = false;
+    this.onEndless = false;
     this.weather = params.get('weather') === 'rainy' ? 'rainy' : 'clear';
     this.timeOfDay = 'noon';
     this.lastTime = performance.now();
@@ -70,8 +71,9 @@ class CorsaApp {
     this.garageUI.currentConfig.carId = getCarSpec(params.get('car')).id;
     this.garageUI.selectCar(this.garageUI.currentConfig.carId);
     this.garageUI.applyAll();
-    if (params.get('sound') === 'ev') this.garageUI.setSound('ev');
     this.loadTrack(params.get('track') || 'apex', params.get('tod'), { seed: params.get('seed') || randomSeed() });
+    // An explicit ?sound= beats the track's default
+    if (['ev', 'engine'].includes(params.get('sound'))) this.garageUI.setSound(params.get('sound'));
     if (params.get('autopilot') === '1') this.setAutopilot(true);
     this.startCamera = params.get('cam') || 'chase';
     if (params.get('autostart') === '1') {
@@ -238,6 +240,12 @@ class CorsaApp {
   loadTrack(trackId, timeOfDay = null, { seed = null } = {}) {
     const path = this.trackBuilder.build(trackId === 'endless' ? 'endless' : getTrackDef(trackId).id, { seed: seed || randomSeed() });
     const def = path.def;
+    // The endless road is for cruising: quiet EV sound there, the engine on the circuits. Only on
+    // switching between the two, so a sound picked in the garage survives a new seed or a restart.
+    if (path.endless !== this.onEndless) {
+      this.onEndless = !!path.endless;
+      this.garageUI.setSound(path.endless ? 'ev' : 'engine');
+    }
     this.physics.setTrack(path);
     this.effects.clear();
     this.hud.setTrack(path);

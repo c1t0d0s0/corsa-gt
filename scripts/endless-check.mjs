@@ -35,6 +35,7 @@ try {
   check('renders frames', await waitFrames());
   check('HUD shows the seed and the landscape', await run("document.getElementById('hud-lap-best').textContent === 'test' && document.getElementById('hud-lap-num').textContent.length > 1"));
   check('autodrive on from the URL', await run("corsa.physics.autopilot && document.getElementById('btn-auto').classList.contains('active')"));
+  check('quiet EV sound on the endless road', await run("corsa.audio.ev && document.querySelector('.sound-btn[data-sound=\"ev\"]').classList.contains('active')"));
   const hashTest = await run(roadHash);
   await shot('endless-start');
 
@@ -48,9 +49,11 @@ try {
 
   console.log('seeds');
   await click('#btn-track');
+  await click('.sound-btn[data-sound="engine"]'); // picked in the garage: should survive a new seed
   await run("document.getElementById('seed-input').value = 'test'");
   await click('#seed-go');
   check('same seed, same road', (await run(roadHash)) === hashTest && (await run('corsa.physics.totalDistance')) < 1);
+  check('  keeps the sound picked in the garage', !(await run('corsa.audio.ev')));
   await click('#seed-random');
   const randomSeed = await run('corsa.physics.track.seed');
   check('random seed loads a different road', randomSeed !== 'test' && (await run(roadHash)) !== hashTest, randomSeed);
@@ -80,6 +83,10 @@ try {
   await click('.track-card[data-track="apex"]');
   check('back to a circuit', (await run("corsa.trackBuilder.def.id === 'apex' && !corsa.trackBuilder.world")) && await waitFrames());
   check('  lap HUD restored', await run("document.getElementById('hud-lap-num').textContent.startsWith('LAP')"));
+  await click('.track-card[data-track="endless"]');
+  check('back on the endless road: EV sound again', await run("corsa.trackBuilder.def.id === 'endless' && corsa.audio.ev"));
+  await click('.track-card[data-track="desert"]');
+  check('on a circuit: engine sound', await run("corsa.trackBuilder.def.id === 'desert' && !corsa.audio.ev"));
   await click('#track-select-close');
 
   check('no console errors or exceptions', problems.length === 0, problems.slice(0, 3).join(' | '));
