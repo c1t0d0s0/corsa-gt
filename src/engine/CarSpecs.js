@@ -36,7 +36,6 @@ export const CAR_SPECS = {
       headlightSpot: [0.56, 0.7, -0.2], // x, y, z from the nose
       mirror: [0.99, 1.0, 0.5],
       wing: { deckZ: -1.92, deckY: 0.97, lip: { y: 1.03, z: -1.96, width: 1.5, pitch: -0.3 } },
-      shadow: [3.0, 5.4]
     },
     cameras: {
       hood: { pos: [0, 1.02, 0.95], look: [0, 0.9, 12] },
@@ -107,7 +106,6 @@ export const CAR_SPECS = {
       headlightSpot: [0.6, 0.74, -0.1],
       mirror: [0.93, 1.06, 0.6],
       wing: { deckZ: -1.8, deckY: 1.0, lip: { y: 1.43, z: -1.62, width: 1.16, pitch: -0.15 } },
-      shadow: [2.8, 4.9]
     },
     cameras: {
       hood: { pos: [0, 1.16, 0.86], look: [0, 1.02, 12] },

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { radialTexture } from './ProceduralTextures.js';
+import { contactShadowTexture } from './ProceduralTextures.js';
 import { CAR_SPECS } from './CarSpecs.js';
 
 // Car space: +Z forward, +X left, origin on the ground under the CG. Shapes come from CarSpecs.js.
@@ -272,15 +272,22 @@ export class CarModel {
     this.createInterior();
     this.setWing(this.wingStyle);
 
-    const [sw, sl] = this.spec.details.shadow;
+    // Contact shadow. The sun's shadow lands off to one side, and nothing else stops sky
+    // light reaching the road under the car, so without this the tarmac beneath it looks lit.
+    const b = this.spec.body;
+    const body = [b.halfWidth * 2, b.zf - b.zr];
+    const plane = [body[0] + 1.1, body[1] + 1.1];
+    const centreZ = (b.zf + b.zr) / 2;
+    const wheels = [b.wheelZ.front, b.wheelZ.rear].map((wz) => [b.wheelX, wz - centreZ]);
     const blob = new THREE.Mesh(
-      new THREE.PlaneGeometry(sw, sl).rotateX(-Math.PI / 2),
+      new THREE.PlaneGeometry(plane[0], plane[1]).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({
-        map: radialTexture(), color: 0x000000, transparent: true, opacity: 0.6,
+        map: contactShadowTexture({ plane, body, wheels }), color: 0x000000, transparent: true, opacity: 0.9,
         depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6
       })
     );
-    blob.position.y = 0.02;
+    blob.position.set(0, 0.02, centreZ);
+    blob.renderOrder = 1;
     this.group.add(blob);
   }
 

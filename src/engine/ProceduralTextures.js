@@ -405,6 +405,54 @@ export function radialTexture() {
   return tex;
 }
 
+/**
+ * Soft shadow for directly under a car: dark across the whole footprint and
+ * darkest where the tyres meet the road, fading out just past the bodywork.
+ * Sizes are metres; the texture spans `plane` and the body covers `body`.
+ * Canvas top is the rear of the car (the plane is laid flat with -Z up).
+ */
+export function contactShadowTexture({ plane, body, wheels }) {
+  const key = `contact:${plane}:${body}:${wheels.map((w) => w.join(',')).join(';')}`;
+  if (cache.has(key)) return cache.get(key);
+  const W = 128;
+  const H = Math.round((W * plane[1]) / plane[0]);
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(W, H);
+  const smooth = (a, b, x) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  const hx = body[0] / 2;
+  const hz = body[1] / 2;
+  const r = Math.min(hx, hz) * 0.55; // corner rounding, metres
+  for (let py = 0; py < H; py++) {
+    for (let px = 0; px < W; px++) {
+      const x = ((px + 0.5) / W - 0.5) * plane[0];
+      const z = (0.5 - (py + 0.5) / H) * plane[1]; // + towards the front
+      // Signed distance to the rounded footprint (negative inside)
+      const qx = Math.abs(x) - (hx - r);
+      const qz = Math.abs(z) - (hz - r);
+      const d = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - r;
+      // Fully dark right out to the bodywork, then a soft falloff on the open road beyond it
+      let a = 0.92 * (1 - smooth(-0.08, 0.48, d));
+      for (const [wx, wz] of wheels) {
+        const e = Math.hypot((Math.abs(x) - wx) / 0.2, (z - wz) / 0.32);
+        a = Math.max(a, 1 - smooth(0.4, 1.2, e));
+      }
+      const i = (py * W + px) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+      img.data[i + 3] = Math.round(a * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = finish(c, { repeat: false });
+  cache.set(key, tex);
+  return tex;
+}
+
 /** Trackside advertising board with a few fictional sponsors. */
 export function bannerTexture(index) {
   const key = `banner${index}`;
