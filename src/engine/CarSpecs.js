@@ -81,9 +81,9 @@ export const CAR_SPECS = {
       archR: 0.37,
       halfWidth: 0.865,
       groundClear: 0.16,
-      // Short, bluff overhangs: the wheels sit right out at the corners
-      nose: { length: 0.45, taper: 0.2, power: 1.7, rise: 0.08 },
-      tail: { length: 0.22, taper: 0.06, rise: 0.08 },
+      // Short overhangs with the wheels right out at the corners, and every end rounded off
+      nose: { length: 0.45, taper: 0.06, power: 1.7, rise: 0.06, round: 0.26 },
+      tail: { length: 0.22, taper: 0.03, rise: 0.06, round: 0.2 },
       belt: [[1.9, 0.76], [1.65, 0.84], [1.3, 0.89], [0.92, 0.92], [0.0, 0.93], [-1.6, 0.94], [-1.95, 0.91]],
       roof: [[0.44, 1.4], [-0.5, 1.43], [-1.52, 1.41]],
       windshield: [0.92, 0.44],
@@ -91,7 +91,13 @@ export const CAR_SPECS = {
       sideGlass: [0.86, -1.54],
       bPillar: [-0.38, -0.48],
       roofWidth: 0.74,
-      shoulderInset: 0.12,
+      shoulderInset: 0.15,
+      // A soft, pillowy section: swelling flanks, a drawn-in shoulder, a domed roof with rounded edges
+      bulge: 0.03,
+      tuck: 0.045,
+      roofEdge: 0.1,
+      crown: 0.05,
+      fender: 0.045,
       // Black pillars all round, so the white roof looks like it floats
       floatingRoof: true,
       roofColor: 0xf3f3f1
@@ -100,7 +106,7 @@ export const CAR_SPECS = {
       style: 'piccola',
       headlightSpot: [0.6, 0.74, -0.1],
       mirror: [0.93, 1.06, 0.6],
-      wing: { deckZ: -1.8, deckY: 1.0, lip: { y: 1.42, z: -1.64, width: 1.3, pitch: -0.15 } },
+      wing: { deckZ: -1.8, deckY: 1.0, lip: { y: 1.43, z: -1.62, width: 1.16, pitch: -0.15 } },
       shadow: [2.8, 4.9]
     },
     cameras: {

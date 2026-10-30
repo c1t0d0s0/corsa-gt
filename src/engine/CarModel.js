@@ -32,22 +32,45 @@ function greenhouse(b, z) {
 }
 
 /**
+ * How far the body pulls in at station z because its ends are rounded off:
+ * a quarter circle of radius nose.round / tail.round (0: square-cut ends).
+ */
+function endRounding(b, z) {
+  const quarter = (r, e) => (r > 0 ? r * (1 - Math.sqrt(1 - e * e)) : 0);
+  const rF = b.nose.round || 0;
+  const rR = b.tail.round || 0;
+  return quarter(rF, rF ? clamp01((z - (b.zf - rF)) / rF) : 0) + quarter(rR, rR ? clamp01((b.zr + rR - z) / rR) : 0);
+}
+
+/**
  * Half cross-section of the body at station z, from the underside centre (0)
- * up and over to the roof centre (12).
+ * up and over to the roof centre (12). Optional section shaping (defaults are
+ * the GT's): bulge (how far the flank swells out), tuck (how far it draws in
+ * at the shoulder), roofEdge (radius-ish of the roof's side edge), crown
+ * (how much the roof rises at the centre) and fender (a smooth swell of the
+ * lower flank over each wheel).
  */
 function section(b, z) {
   const tF = clamp01((z - (b.zf - b.nose.length)) / b.nose.length);
   const tR = clamp01((b.zr + b.tail.length - z) / b.tail.length);
+  // Rounded ends pull in sideways (rounded corners seen from above) and roll over top and bottom
+  const end = endRounding(b, z);
+  const { bulge = 0.008, tuck = 0.015, roofEdge = 0.045, crown = 0.02, fender = 0 } = b;
 
   let arch = 0;
+  let swell = 0;
   for (const wz of [b.wheelZ.front, b.wheelZ.rear]) {
     const dz = Math.abs(z - wz);
     if (dz < b.archR) arch = Math.max(arch, Math.sqrt(b.archR * b.archR - dz * dz));
+    const d = dz / (b.archR * 1.8);
+    if (d < 1) swell = Math.max(swell, fender * (1 - d * d) ** 2);
   }
 
-  const w = b.halfWidth * (1 - b.nose.taper * Math.pow(tF, b.nose.power)) * (1 - b.tail.taper * tR * tR) + (arch > 0 ? 0.012 : 0);
-  const yb = b.groundClear + b.nose.rise * tF * tF + b.tail.rise * Math.pow(tR, 1.5);
-  const belt = spline1(b.belt, z);
+  // A small lip at the arch edges, unless the fenders swell smoothly instead
+  const lip = arch > 0 && !fender ? 0.012 : 0;
+  const w = b.halfWidth * (1 - b.nose.taper * Math.pow(tF, b.nose.power)) * (1 - b.tail.taper * tR * tR) + lip - end;
+  const yb = b.groundClear + b.nose.rise * tF * tF + b.tail.rise * Math.pow(tR, 1.5) + end * 0.5;
+  const belt = spline1(b.belt, z) - end * 0.7;
   const g = greenhouse(b, z);
   const top = belt + 0.015 + g * (spline1(b.roof, z) - belt - 0.015);
   const gh = top - belt;
@@ -55,22 +78,25 @@ function section(b, z) {
   const xi = w - 0.3;
   const wr = lerp(w - b.shoulderInset, b.roofWidth * (w / b.halfWidth), g);
 
-  const p7 = [w - 0.05, belt + Math.min(0.03, gh * 0.3)];
-  const p9 = [wr, top - Math.min(0.045, gh * 0.3)];
+  // Lower flank heights. Measured from the arch top they jump where an arch begins, leaving a crease
+  // down the side; cars with smooth fenders measure from the sill instead and only rise inside the arch.
+  const flankY = (f) => (fender ? Math.max(ya + 0.03 + f * 0.04, yb + (belt - yb) * f) : ya + (belt - ya) * f);
+  const p7 = [w - 0.035 - tuck, belt + Math.min(0.03, gh * 0.3)];
+  const p9 = [wr, top - Math.min(roofEdge, gh * 0.3)];
   const ctrl = [
     [0, yb],
     [xi, yb],
     [xi, ya],
-    [w - 0.03, ya],
-    [w, ya + (belt - ya) * 0.3],
-    [w + 0.008, ya + (belt - ya) * 0.65],
-    [w - 0.015, belt],
+    [w - 0.03 + swell, ya],
+    [w + swell, flankY(0.3)],
+    [w + bulge + swell, flankY(0.65)],
+    [w - tuck + swell * 0.4, belt],
     p7,
     [(p7[0] + p9[0]) / 2 + 0.012 * g, (p7[1] + p9[1]) / 2],
     p9,
-    [wr - 0.1, top - Math.min(0.012, gh * 0.1)],
-    [wr * 0.5, top + 0.012],
-    [0, top + 0.02]
+    [wr - Math.max(0.1, roofEdge * 1.6), top - Math.min(roofEdge * 0.25, gh * 0.1)],
+    [wr * 0.5, top + crown * 0.6],
+    [0, top + crown]
   ];
 
   // Underside and wheel wells stay hard-edged; the painted skin (3..12) is rounded off
@@ -110,6 +136,8 @@ function panelMaterial(b, band, z) {
     // Blacked-out A and C pillars make the roof look as if it floats
     if (b.floatingRoof && g > 0.05) return TRIM;
   }
+  // ...right up to the roof's edge beside the windscreen and rear window
+  if (b.floatingRoof && band === 9 && g > 0.05 && g < 0.999) return TRIM;
   if (band >= 10 && (inRange(b.windshield) || inRange(b.backlight))) return GLASS;
   if (band >= 9 && g >= 0.999) return ROOF;
   return PAINT;
@@ -122,6 +150,12 @@ function buildBodyGeometry(b) {
     ...b.windshield, ...b.backlight, ...b.sideGlass, ...b.bPillar,
     b.wheelZ.front + b.archR, b.wheelZ.front - b.archR, b.wheelZ.rear + b.archR, b.wheelZ.rear - b.archR, b.zf
   ].forEach((z) => stations.add(z.toFixed(3)));
+  // Rounded ends curve fastest right at the tip: put extra stations there
+  for (let k = 1; k < 10; k++) {
+    const e = Math.sin((k / 10) * Math.PI / 2);
+    if (b.nose.round) stations.add((b.zf - b.nose.round * (1 - e)).toFixed(3));
+    if (b.tail.round) stations.add((b.zr + b.tail.round * (1 - e)).toFixed(3));
+  }
   const zs = [...stations].map(Number).sort((p, q) => p - q);
 
   const top = section(b, 0).length - 1; // index of the roof centre in a half section
@@ -160,8 +194,8 @@ function buildBodyGeometry(b) {
       else tris[PAINT].push(centre, i0, i1);
     }
   };
-  cap(zs.length - 1, b.zf + 0.04, true);
-  cap(0, b.zr - 0.03, false);
+  cap(zs.length - 1, b.zf + (b.nose.round ? 0.015 : 0.04), true);
+  cap(0, b.zr - (b.tail.round ? 0.012 : 0.03), false);
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -173,6 +207,29 @@ function buildBodyGeometry(b) {
   });
   geo.computeVertexNormals();
   return geo;
+}
+
+/**
+ * Where the skin is at height y and sideways offset x, seen from the front
+ * (front = true) or the back: the station z at which the body first reaches
+ * out to x. Used to sit lamps and badges on a rounded nose or tail.
+ */
+function surfaceZ(b, x, y, front = true) {
+  const halfWidthAt = (z) => {
+    const half = section(b, z);
+    let best = 0;
+    for (let i = 3; i < half.length - 1; i++) {
+      const [x0, y0] = half[i];
+      const [x1, y1] = half[i + 1];
+      if ((y0 - y) * (y1 - y) <= 0 && y0 !== y1) best = Math.max(best, x0 + (x1 - x0) * (y - y0) / (y1 - y0));
+    }
+    return best;
+  };
+  const step = front ? -0.004 : 0.004;
+  for (let z = front ? b.zf : b.zr; front ? z > 0 : z < 0; z += step) {
+    if (halfWidthAt(z) >= x) return z;
+  }
+  return 0;
 }
 
 const FINISHES = {
@@ -316,17 +373,19 @@ export class CarModel {
 
     // Hexagonal grille tucked up under the bonnet line between the headlamps
     const hex = (r, depth) => new THREE.CylinderGeometry(r, r, depth, 6).rotateX(Math.PI / 2).rotateZ(Math.PI / 6).scale(1.6, 0.62, 1);
-    this.part(hex(0.24, 0.05), this.chromeMat, 0, 0.6, zf + 0.025);
-    this.part(hex(0.21, 0.06), this.trimMat, 0, 0.6, zf + 0.03);
-    // Lower bumper intake and a slim chrome bar across the bumper
-    this.part(new THREE.BoxGeometry(0.8, 0.1, 0.06), this.trimMat, 0, 0.3, zf + 0.0);
-    this.part(new THREE.BoxGeometry(1.2, 0.025, 0.04), this.chromeMat, 0, 0.4, zf + 0.03);
+    const grilleZ = surfaceZ(b, 0.3, 0.56);
+    this.part(hex(0.22, 0.05), this.chromeMat, 0, 0.56, grilleZ + 0.02);
+    this.part(hex(0.19, 0.06), this.trimMat, 0, 0.56, grilleZ + 0.025);
+    // Lower intake and a slim chrome bar following the round of the bumper
+    const bar = (len, r) => new THREE.CapsuleGeometry(r, len, 6, 12).rotateZ(Math.PI / 2);
+    this.part(bar(0.5, 0.05).scale(1, 1, 0.5), this.trimMat, 0, 0.3, surfaceZ(b, 0.3, 0.3) + 0.01);
+    this.part(bar(0.7, 0.014), this.chromeMat, 0, 0.4, surfaceZ(b, 0.42, 0.4) + 0.01);
 
     // Black arch flares around every wheel, the car's most recognisable outline
     const flareGeo = new THREE.TorusGeometry(b.archR + 0.015, 0.045, 8, 28, Math.PI).rotateY(Math.PI / 2);
     for (const wz of [b.wheelZ.front, b.wheelZ.rear]) {
       for (const x of [-1, 1]) {
-        this.part(flareGeo, this.trimMat, x * (b.halfWidth + 0.005), b.wheelR, wz);
+        this.part(flareGeo, this.trimMat, x * (b.halfWidth + (b.fender || 0) + 0.005), b.wheelR, wz);
       }
     }
     // Sill cladding between the arches
@@ -336,10 +395,10 @@ export class CarModel {
       this.part(new THREE.BoxGeometry(0.05, 0.13, sillLength), this.trimMat, x * (b.halfWidth - 0.005), 0.27, sillZ);
     }
 
-    // Rear: black bumper insert, twin exhausts in the middle
-    this.part(new THREE.BoxGeometry(1.1, 0.12, 0.06), this.trimMat, 0, 0.3, zr - 0.0);
+    // Rear: rounded black bumper insert, twin exhausts in the middle
+    this.part(new THREE.CapsuleGeometry(0.06, 0.62, 6, 12).rotateZ(Math.PI / 2).scale(1, 1, 0.5), this.trimMat, 0, 0.3, surfaceZ(b, 0.36, 0.3, false) - 0.01);
     const pipeGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.16, 16).rotateX(Math.PI / 2);
-    for (const x of [-0.08, 0.08]) this.part(pipeGeo, this.chromeMat, x, 0.27, zr - 0.02);
+    for (const x of [-0.08, 0.08]) this.part(pipeGeo, this.chromeMat, x, 0.27, surfaceZ(b, 0.1, 0.27, false) - 0.02);
 
     // Short whip aerial at the back of the roof
     this.part(new THREE.CylinderGeometry(0.008, 0.012, 0.28, 6), this.trimMat, 0, 1.55, -1.35).rotation.x = -0.35;
@@ -355,9 +414,12 @@ export class CarModel {
       this.body.add(lamp);
       this.headlamps.push(lamp);
       if (piccola) {
-        // Big round headlamps on the front face, their tops rising above the bonnet line
-        lamp.position.set(x * 0.5, 0.71, b.zf - 0.02);
-        lamp.rotation.set(-0.1, x * 0.18, 0, 'YXZ');
+        // Big round headlamps sitting in the rounded front corners, tops rising above the bonnet line
+        const lx = 0.5;
+        const lz = surfaceZ(b, lx, 0.66);
+        const yaw = Math.atan2(lz - surfaceZ(b, lx + 0.1, 0.66), 0.1); // face along the curve of the nose
+        lamp.position.set(x * lx, 0.69, lz - 0.01);
+        lamp.rotation.set(-0.1, x * yaw, 0, 'YXZ');
         this.part(new THREE.TorusGeometry(0.155, 0.026, 10, 36), this.chromeMat, 0, 0, 0, lamp).castShadow = false;
         this.part(new THREE.CylinderGeometry(0.145, 0.145, 0.06, 36).rotateX(Math.PI / 2), this.glassMat, 0, 0, -0.02, lamp).castShadow = false;
         this.part(new THREE.TorusGeometry(0.115, 0.012, 8, 36), this.headMat, 0, 0, 0.012, lamp).castShadow = false;
@@ -379,13 +441,22 @@ export class CarModel {
     }
 
     if (piccola) {
-      // Tall tail lamps at each rear corner, reversing lamps in the bumper
+      // Tall oval tail lamps in chrome rims, set into the rounded rear corners
+      const oval = (r, depth) => new THREE.CylinderGeometry(r, r, depth, 28).rotateX(Math.PI / 2).scale(0.62, 1, 1);
+      const tx = 0.56;
+      const tz = surfaceZ(b, tx, 0.82, false);
+      const yaw = Math.atan2(surfaceZ(b, tx + 0.08, 0.82, false) - tz, 0.08);
       for (const x of [-1, 1]) {
-        this.part(new THREE.BoxGeometry(0.16, 0.24, 0.05), this.chromeMat, x * 0.66, 0.84, b.zr + 0.01).castShadow = false;
-        this.part(new THREE.BoxGeometry(0.13, 0.21, 0.05), this.tailMat, x * 0.66, 0.84, b.zr - 0.0).castShadow = false;
-        this.part(new THREE.BoxGeometry(0.1, 0.04, 0.05), this.reverseMat, x * 0.36, 0.42, b.zr - 0.01).castShadow = false;
+        const lamp = new THREE.Group();
+        lamp.position.set(x * tx, 0.82, tz + 0.005);
+        lamp.rotation.y = x * yaw;
+        this.body.add(lamp);
+        this.part(oval(0.135, 0.05), this.chromeMat, 0, 0, 0, lamp).castShadow = false;
+        this.part(oval(0.115, 0.06), this.tailMat, 0, 0, -0.004, lamp).castShadow = false;
+        this.part(new THREE.CapsuleGeometry(0.02, 0.07, 4, 8).rotateZ(Math.PI / 2), this.reverseMat, x * 0.3, 0.42, surfaceZ(b, 0.34, 0.42, false) - 0.01).castShadow = false;
       }
-      this.part(new THREE.BoxGeometry(0.42, 0.13, 0.03), this.trimMat, 0, 0.6, b.zr - 0.015);
+      // Number plate recess
+      this.part(new THREE.BoxGeometry(0.42, 0.13, 0.03), this.trimMat, 0, 0.6, surfaceZ(b, 0.21, 0.6, false) - 0.01);
       return;
     }
 
@@ -500,7 +571,13 @@ export class CarModel {
     const mount = this.spec.details.wing;
     if (style === 'stealth') {
       const { y, z, width, pitch } = mount.lip;
-      this.part(new THREE.BoxGeometry(width, 0.035, 0.26), this.carbonMat, 0, y, z, g).rotation.x = pitch;
+      if (this.spec.details.style === 'piccola') {
+        // A soft, roof-coloured lip with rounded edges rather than a carbon blade
+        const lip = new THREE.CapsuleGeometry(0.035, width - 0.07, 6, 16).rotateZ(Math.PI / 2).scale(1, 0.75, 3.4);
+        this.part(lip, this.roofMat, 0, y, z, g).rotation.x = pitch;
+      } else {
+        this.part(new THREE.BoxGeometry(width, 0.035, 0.26), this.carbonMat, 0, y, z, g).rotation.x = pitch;
+      }
       return;
     }
 
