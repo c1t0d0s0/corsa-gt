@@ -9,10 +9,21 @@
  * wind, road and tyre noise are layered on top.
  *
  * In EV mode the engine falls silent and an electric drive takes over: the
- * motor's whine and the reduction gear's hum, both locked to road speed, plus
+ * motor's tone and the reduction gear's hum, both locked to road speed, plus
  * the soft warning tone EVs play at walking pace. Wind, road and tyres stay.
  */
 const HARMONICS = 40;
+
+/**
+ * Pitch of the electric motor's tone for a road speed. It climbs quickly away
+ * from rest so acceleration is easy to hear, then levels off: about 280 Hz at
+ * 50 km/h, 600 Hz at 200 km/h and never much past 750 Hz, which keeps it in the
+ * warm middle of the range instead of a thin whistle at speed.
+ */
+export function motorHz(kmh) {
+  const v = Math.abs(kmh);
+  return 85 + 420 * (1 - Math.exp(-v / 110)) + v * 0.8;
+}
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -183,20 +194,21 @@ export class AudioEngine {
 
       // --- Electric drive: motor whine, reduction-gear hum, low-speed warning tone ---
       const evBus = gain(1);
-      chain(evBus, filter('highpass', 90, 0.7), out);
+      // Trim the very bottom and everything above the upper midrange, where tones turn shrill
+      chain(evBus, filter('highpass', 70, 0.7), filter('lowpass', 2200, 0.6), out);
       this.motorOsc = ctx.createOscillator();
       this.motorOsc.type = 'sine';
       this.motorOsc.frequency.setValueAtTime(100, now);
       this.motorOsc.start();
       this.motorGain = gain(0);
       chain(this.motorOsc, this.motorGain, evBus);
-      // The inverter adds a thinner overtone that comes up under hard acceleration
+      // Under hard acceleration a second voice a fifth above joins in: a chord, not a shriek
       this.motorOsc2 = ctx.createOscillator();
-      this.motorOsc2.type = 'triangle';
-      this.motorOsc2.frequency.setValueAtTime(300, now);
+      this.motorOsc2.type = 'sine';
+      this.motorOsc2.frequency.setValueAtTime(150, now);
       this.motorOsc2.start();
       this.motorGain2 = gain(0);
-      chain(this.motorOsc2, filter('lowpass', 5000, 0.5), this.motorGain2, evBus);
+      chain(this.motorOsc2, this.motorGain2, evBus);
       this.gearOsc = ctx.createOscillator();
       this.gearOsc.type = 'sine';
       this.gearOsc.frequency.setValueAtTime(40, now);
@@ -220,7 +232,8 @@ export class AudioEngine {
       // --- Wind and road ---
       this.windFilter = filter('bandpass', 700, 0.5);
       this.windGain = gain(0);
-      chain(noise(), this.windFilter, this.windGain, out);
+      // A broad band of noise with its top rolled off: a rush of air rather than a hiss
+      chain(noise(), this.windFilter, filter('lowpass', 1400, 0.5), this.windGain, out);
       this.roadFilter = filter('lowpass', 160, 0.7);
       this.roadGain = gain(0);
       chain(noise(), this.roadFilter, this.roadGain, out);
@@ -305,13 +318,13 @@ export class AudioEngine {
     // Lifting off or braking above walking pace: the motor regenerates and keeps singing, more softly
     const regenTarget = s.running === false ? 0 : clamp((1 - throttle * 3) * clamp((kmh - 8) / 30, 0, 1), 0, 1) * (0.5 + clamp(s.brake || 0, 0, 1) * 0.5);
     this.regen += (regenTarget - this.regen) * Math.min(1, 6 * dt);
-    const motorHz = 70 + kmh * 15;
-    set(this.motorOsc.frequency, motorHz, 0.05);
-    set(this.motorOsc2.frequency, motorHz * 2.98, 0.05);
+    const hz = motorHz(kmh);
+    set(this.motorOsc.frequency, hz, 0.05);
+    set(this.motorOsc2.frequency, hz * 1.5, 0.05);
     set(this.gearOsc.frequency, 30 + kmh * 2.6, 0.05);
     const effort = Math.sqrt(this.load);
     set(this.motorGain.gain, moving * (0.008 + effort * 0.03 + this.regen * 0.014), 0.06);
-    set(this.motorGain2.gain, moving * effort * 0.006, 0.06);
+    set(this.motorGain2.gain, moving * effort * 0.012, 0.06);
     set(this.gearGain.gain, moving * (0.03 + effort * 0.03), 0.08);
     // Warning tone at walking pace (and a faint hum at a standstill), rising a little with speed
     const avas = s.running === false ? 0 : (1 - clamp(kmh / 30, 0, 1)) * (kmh < 1 ? 0.25 : 1);
@@ -381,7 +394,7 @@ export class AudioEngine {
     // Wind and road
     const speed = clamp(s.speedKmh / 250, 0, 1.2);
     const offRoad = s.surface === 'grass' || s.surface === 'sand';
-    set(this.windFilter.frequency, 450 + speed * 1300, 0.2);
+    set(this.windFilter.frequency, 350 + speed * 650, 0.2);
     set(this.windGain.gain, speed * speed * 0.16, 0.2);
     set(this.roadFilter.frequency, offRoad ? 420 : s.wet ? 900 : 190, 0.15);
     const roadLevel = offRoad ? 0.4 : s.surface === 'kerb' ? 0.3 : s.wet ? 0.14 : 0.11;
