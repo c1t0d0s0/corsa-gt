@@ -115,9 +115,30 @@ try {
   await waitFrames(4);
   check('game waits while upright', (await run('corsa.physics.currentLapTime + corsa.physics.position.z')) === t0);
   await shot('m-portrait');
+
+  // Upright on the endless road with autodrive: the scenic view keeps driving, full screen
+  console.log('scenic view (upright, endless road, autodrive)');
+  await tapOn('#scenic-btn');
+  check('scenic button starts the endless road on autodrive', await until("corsa.trackBuilder.def.id === 'endless' && corsa.physics.autopilot && corsa.scenic", 120000));
+  check('  rotate prompt and controls out of the way', await run("getComputedStyle(document.getElementById('rotate-overlay')).display === 'none' && getComputedStyle(document.querySelector('.top-nav')).pointerEvents === 'none'"));
+  const d0 = await run('corsa.physics.totalDistance');
+  await waitFrames(6);
+  check('  keeps driving while upright', (await run('corsa.physics.totalDistance')) > d0);
+  check('  canvas fills the screen', await run('corsa.renderer.renderer.domElement.clientWidth === innerWidth && corsa.renderer.renderer.domElement.clientHeight === innerHeight'));
+  await run('corsa.showScenicUi(true); clearTimeout(corsa.scenicUiTimer)');
+  check('  a tap brings the controls back', await run("getComputedStyle(document.querySelector('.top-nav')).pointerEvents === 'auto'"));
+  await shot('m-scenic');
+  await run("document.getElementById('btn-auto').click()");
+  await waitFrames();
+  check('autodrive off: back to the rotate prompt', !(await run('corsa.scenic')) && await run("getComputedStyle(document.getElementById('rotate-overlay')).display === 'flex'"));
+  await run("document.getElementById('btn-auto').click()");
+  await waitFrames();
+  check('  and on again: scenic view', await run('corsa.scenic'));
+
   await device(844, 390);
   await waitFrames();
   check('prompt clears in landscape', await run("getComputedStyle(document.getElementById('rotate-overlay')).display === 'none'"));
+  check('  scenic view ends in landscape', !(await run('corsa.scenic')) && !(await run("document.body.classList.contains('scenic')")));
 
   check('no console errors or exceptions', problems.length === 0, problems.slice(0, 3).join(' | '));
 } catch (err) {

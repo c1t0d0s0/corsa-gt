@@ -26,6 +26,7 @@ export class CameraRig {
     this.viewShift = '';
     this.panelOpen = false; // a side panel covers part of the view (garage)
     this.titleView = false; // slow, low showroom orbit behind the title screen
+    this.scenic = false; // upright phone watching the endless road: a higher, longer view
 
     this.orbitAngle = 0.6;
     this.orbitHeight = 1.7;
@@ -95,7 +96,7 @@ export class CameraRig {
       // Look partly where the car is going, not just where it points, so slides stay readable
       const drift = speed > 4 && physics.vx > 0 ? clamp(Math.atan2(physics.vy, physics.vx), -0.5, 0.5) : 0;
       const targetYaw = heading + drift * 0.45;
-      const targetDist = 6.2 + clamp(speed / 70, 0, 1) * 1.3 + clamp(physics.gForceLongitudinal, -1.2, 1.2) * 0.45;
+      const targetDist = 6.2 + clamp(speed / 70, 0, 1) * 1.3 + clamp(physics.gForceLongitudinal, -1.2, 1.2) * 0.45 + (this.scenic ? 7 : 0);
       if (this.needsSnap) {
         this.yaw = targetYaw;
         this.distance = targetDist;
@@ -105,8 +106,10 @@ export class CameraRig {
       }
       const sy = Math.sin(this.yaw);
       const cy = Math.cos(this.yaw);
-      this._pos.set(pos.x - sy * this.distance, pos.y + 2.55, pos.z - cy * this.distance);
-      this._look.set(pos.x + Math.sin(heading) * 6, pos.y + 0.35, pos.z + Math.cos(heading) * 6);
+      // The scenic view sits higher and looks further down the road, so the landscape fills the frame
+      const lookAhead = this.scenic ? 60 : 6;
+      this._pos.set(pos.x - sy * this.distance, pos.y + (this.scenic ? 6.5 : 2.55), pos.z - cy * this.distance);
+      this._look.set(pos.x + Math.sin(heading) * lookAhead, pos.y + (this.scenic ? 1.5 : 0.35), pos.z + Math.cos(heading) * lookAhead);
 
       // Fine vibration at speed, a kick on wall contact
       this.shake = Math.max(this.shake * Math.exp(-6 * dt), clamp(physics.wallHit * 0.05, 0, 0.5));
@@ -144,11 +147,18 @@ export class CameraRig {
       fov = 42;
     }
 
-    // Slide the picture so the car clears the gauge cluster (chase) or the garage panel (orbit)
+    // Upright screens: widen the view so the landscape isn't a narrow slot
     const w = window.innerWidth;
     const h = window.innerHeight;
+    if (this.mode !== 'orbit' && w < h) {
+      const portraitFov = (2 * Math.atan(Math.tan((52 * Math.PI) / 360) * (h / w)) * 180) / Math.PI;
+      fov = Math.max(fov, Math.min(84, portraitFov));
+    }
+
+    // Slide the picture so the car clears the gauge cluster (chase) or the garage panel (orbit)
     let shiftX = 0;
-    let shiftY = this.mode === 'chase' ? Math.round(h * 0.11) : 0;
+    // (the scenic view has no gauges to clear, but a little less sky helps there too)
+    let shiftY = this.mode === 'chase' ? Math.round(h * (this.scenic ? 0.07 : 0.11)) : 0;
     if (this.mode === 'orbit' && this.titleView) {
       // Keep the car clear of the wordmark: to the right in landscape, up the screen in portrait
       if (w > h) shiftX = -Math.round(w * 0.2);

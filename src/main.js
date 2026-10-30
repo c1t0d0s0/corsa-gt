@@ -62,6 +62,7 @@ class CorsaApp {
     this.cameraBeforeGarage = null;
     this.recovering = false;
     this.onEndless = false;
+    this.scenic = false;
     this.weather = params.get('weather') === 'rainy' ? 'rainy' : 'clear';
     this.timeOfDay = 'noon';
     this.lastTime = performance.now();
@@ -107,13 +108,46 @@ class CorsaApp {
     if (overlay) overlay.classList.add('hidden');
   }
 
-  /** Phones: go fullscreen and pin landscape where the browser allows it (Android; iOS just rotates). */
+  /**
+   * Phones: go fullscreen and pin landscape where the browser allows it (Android; iOS just
+   * rotates). Not on the endless road, which can also be watched upright.
+   */
   enterLandscape() {
+    this.goFullscreen(!this.physics.track || !this.physics.track.endless);
+  }
+
+  goFullscreen(lockLandscape = false) {
     const root = document.documentElement;
-    if (!root.requestFullscreen) return;
+    if (!root.requestFullscreen || document.fullscreenElement) return;
     root.requestFullscreen({ navigationUI: 'hide' })
-      .then(() => window.screen.orientation && window.screen.orientation.lock && window.screen.orientation.lock('landscape'))
+      .then(() => lockLandscape && window.screen.orientation && window.screen.orientation.lock && window.screen.orientation.lock('landscape'))
       .catch(() => {});
+  }
+
+  /**
+   * Scenic view: a phone held upright on the endless road with autodrive on.
+   * Instead of asking to rotate, the game keeps going with the picture filling
+   * the screen and every control out of the way until the screen is tapped.
+   */
+  updateScenic() {
+    const track = this.physics.track;
+    const scenic = !!(this.started && this.touch.portrait && track && track.endless && this.physics.autopilot);
+    if (scenic === this.scenic) return;
+    this.scenic = scenic;
+    document.body.classList.toggle('scenic', scenic);
+    this.renderer.cameraRig.scenic = scenic;
+    this.renderer.snapCamera();
+    this.showScenicUi(false);
+    clearTimeout(this.scenicHintTimer);
+    document.body.classList.toggle('scenic-hint', scenic);
+    if (scenic) this.scenicHintTimer = setTimeout(() => document.body.classList.remove('scenic-hint'), 3500);
+  }
+
+  /** Show the few scenic-view controls for a few seconds (or hide them now). */
+  showScenicUi(on) {
+    clearTimeout(this.scenicUiTimer);
+    document.body.classList.toggle('scenic-ui', on);
+    if (on) this.scenicUiTimer = setTimeout(() => this.showScenicUi(false), 4500);
   }
 
   /** Swap the car (body, handling and engine note), keeping paint and wheels. */
@@ -187,6 +221,21 @@ class CorsaApp {
   }
 
   setupEvents() {
+    // Scenic view: a tap on the picture brings the controls up (and goes fullscreen where it can)
+    this.renderer.renderer.domElement.addEventListener('pointerup', () => {
+      if (!this.scenic) return;
+      this.goFullscreen();
+      this.showScenicUi(!document.body.classList.contains('scenic-ui'));
+    });
+    document.querySelector('.top-nav')?.addEventListener('pointerdown', () => { if (this.scenic) this.showScenicUi(true); });
+    const scenicBtn = document.getElementById('scenic-btn');
+    scenicBtn?.addEventListener('click', () => {
+      if (!this.physics.track.endless) this.loadTrack('endless', null, { seed: this.trackSelectUI.seed() });
+      this.setAutopilot(true);
+      this.goFullscreen();
+      scenicBtn.blur();
+    });
+
     const startOverlay = document.getElementById('audio-start-overlay');
     if (startOverlay) startOverlay.addEventListener('click', () => this.start());
     window.addEventListener('keydown', (e) => { if (!this.started && e.code === 'Enter') this.start(); });
@@ -240,6 +289,10 @@ class CorsaApp {
   loadTrack(trackId, timeOfDay = null, { seed = null } = {}) {
     const path = this.trackBuilder.build(trackId === 'endless' ? 'endless' : getTrackDef(trackId).id, { seed: seed || randomSeed() });
     const def = path.def;
+    // Let the endless road be watched upright even if a circuit pinned the screen to landscape
+    if (path.endless && window.screen.orientation && window.screen.orientation.unlock) {
+      try { window.screen.orientation.unlock(); } catch { /* not in fullscreen, nothing to undo */ }
+    }
     // The endless road is for cruising: quiet EV sound there, the engine on the circuits. Only on
     // switching between the two, so a sound picked in the garage survives a new seed or a restart.
     if (path.endless !== this.onEndless) {
@@ -326,7 +379,8 @@ class CorsaApp {
 
   frame(dt) {
     const menuOpen = this.garageUI.visible || this.trackSelectUI.visible;
-    const running = this.started && !this.paused && !menuOpen && !this.touch.portrait;
+    this.updateScenic();
+    const running = this.started && !this.paused && !menuOpen && (!this.touch.portrait || this.scenic);
     document.body.classList.toggle('menu-open', menuOpen); // hides the on-screen driving controls
 
     this.input.update(dt);

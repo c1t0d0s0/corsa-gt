@@ -1102,6 +1102,97 @@ body.touch.menu-open .touch-overlay { display: none; }
   body.touch.pre-start #rotate-overlay { display: none; }
 }
 
+.scenic-btn {
+  margin-top: 18px;
+  max-width: 300px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--color-accent);
+  background: rgba(56, 189, 248, 0.15);
+  color: #f8fafc;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scenic view: a phone held upright on the endless road, on autodrive. */
+/* The picture fills the screen; a tap shows a few controls for a while. */
+/* ------------------------------------------------------------------ */
+body.scenic #rotate-overlay { display: none; }
+
+body.scenic .touch-overlay,
+body.scenic #hud-overlay,
+body.scenic .top-nav {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.scenic.scenic-ui .top-nav,
+body.scenic.scenic-ui #hud-overlay {
+  opacity: 1;
+}
+
+body.scenic.scenic-ui .top-nav { pointer-events: auto; }
+
+/* Only what makes sense while watching: autodrive (to take over), camera, tracks, sound */
+body.scenic .brand,
+body.scenic #btn-mode,
+body.scenic #btn-garage,
+body.scenic #btn-telemetry,
+body.scenic #btn-reset,
+body.scenic .hud-minimap-box,
+body.scenic .hud-center-cluster {
+  display: none;
+}
+
+body.scenic .top-nav {
+  top: max(8px, env(safe-area-inset-top));
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  height: 44px;
+  padding: 0 8px;
+  justify-content: center;
+}
+
+body.scenic .btn-icon {
+  font-size: 0;
+  gap: 0;
+  padding: 0;
+  width: 46px;
+  height: 34px;
+  justify-content: center;
+}
+
+body.scenic .btn-icon .icon { font-size: 1.1rem; }
+
+body.scenic .hud-lap-box {
+  top: calc(max(8px, env(safe-area-inset-top)) + 54px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+#scenic-hint {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  color: rgba(248, 250, 252, 0.85);
+  font-size: 0.8rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  z-index: 25;
+}
+
+/* Shown briefly on entering the scenic view */
+body.scenic.scenic-hint #scenic-hint { opacity: 1; }
+
 /* ------------------------------------------------------------------ */
 /* Short viewports: phones in landscape                                 */
 /* ------------------------------------------------------------------ */

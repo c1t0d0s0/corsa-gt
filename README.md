@@ -94,7 +94,7 @@ Standard layout (Xbox naming):
 
 ### Touch
 
-Hold the phone in landscape. Held upright, the game pauses and asks you to rotate.
+Hold the phone in landscape. Held upright, the game pauses and asks you to rotate, except on the endless road with autodrive on: then it carries on as a full-screen *scenic view* for just watching the landscape go by. The rotate prompt has a button that goes straight there. Tap the screen to bring up a few controls (autodrive, camera, tracks, sound) for a moment; turning autodrive off or rotating to landscape ends the scenic view.
 
 - **Left thumb** — steering pad. Touch anywhere on it and slide left or right; steering is relative to where your thumb lands.
 - **Right thumb** — `GAS` and `BRAKE`. Hold `BRAKE` at a standstill to reverse.

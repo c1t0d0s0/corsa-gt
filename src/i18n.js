@@ -55,7 +55,9 @@ const STRINGS = {
     'biome.coast': 'COAST',
     'biome.steppe': 'STEPPE',
     'biome.desert': 'DESERT',
-    'biome.mountain': 'MOUNTAINS'
+    'biome.mountain': 'MOUNTAINS',
+    'scenic.button': 'Or stay upright and watch the endless road on autodrive',
+    'scenic.hint': 'Tap for controls'
   },
   ja: {
     'start.button': 'ENGINE START',
@@ -106,7 +108,9 @@ const STRINGS = {
     'biome.coast': '海沿い',
     'biome.steppe': '乾いた草原',
     'biome.desert': '砂漠',
-    'biome.mountain': '山道'
+    'biome.mountain': '山道',
+    'scenic.button': '縦画面のまま、オートドライブでエンドレスロードを眺める',
+    'scenic.hint': 'タップで操作ボタンを表示'
   }
 };
 
