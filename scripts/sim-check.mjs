@@ -247,13 +247,15 @@ function runEndless(seed, km, weather) {
   car.setWeather(weather);
   car.setTrack(path);
   car.autopilot = true;
-  let t = 0, maxErr = 0, recovers = 0, maxKmh = 0;
+  let t = 0, maxErr = 0, recovers = 0, maxKmh = 0, maxSink = 0;
   while (car.totalDistance < km * 1000 && t < km * 120) {
     car.step(idle, DT);
     t += DT;
     if (car.needsRecover) { recovers++; car.recover(); }
     if (car.totalDistance > 200) maxErr = Math.max(maxErr, Math.abs(car.q.offset - car.laneOffset));
     maxKmh = Math.max(maxKmh, car.speedKmh);
+    // On the tarmac the car must sit on the road surface, not on the terrain laid just below it
+    if (Math.abs(car.q.offset) < path.halfWidth) maxSink = Math.max(maxSink, Math.abs(car.position.y - car.q.y));
   }
   const avg = (car.totalDistance / t) * 3.6;
   console.log(`  autopilot "${seed}" ${weather}: ${(car.totalDistance / 1000).toFixed(1)}km  avg ${avg.toFixed(0)}km/h  vmax ${maxKmh.toFixed(0)}km/h  max lane error ${maxErr.toFixed(2)}m  recovers ${recovers}`);
@@ -261,6 +263,7 @@ function runEndless(seed, km, weather) {
   if (recovers > 0) fail(`autopilot "${seed}" left the road`);
   if (maxErr > path.halfWidth / 2) fail(`autopilot "${seed}" wandered out of its lane`);
   if (maxKmh > 100) fail(`autopilot "${seed}" cruised too fast`);
+  if (maxSink > 0.01) fail(`autopilot "${seed}" sat ${(maxSink * 100).toFixed(1)} cm off the road surface`);
 }
 
 console.log('\n== ENDLESS ROAD');

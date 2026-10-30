@@ -218,7 +218,7 @@ export class VehiclePhysics {
       t.pointAt(s, 0, this.position);
       this.heading = t.headingAt(s);
       t.query(this.position.x, this.position.z, -1, this.q);
-      this.position.y = t.endless ? t.groundAt(this.position.x, this.position.z, this.q) : this.q.y;
+      this.position.y = t.endless ? this.endlessSurfaceY() : this.q.y;
     } else {
       this.position.set(0, 0, 0);
       this.heading = 0;
@@ -245,6 +245,19 @@ export class VehiclePhysics {
     this.placeOnTrack(this.q.s);
     this.offRoadTime = 0;
     this.needsRecover = false;
+  }
+
+  /**
+   * Height the car sits at on the endless road. The terrain there is laid a few
+   * centimetres below the tarmac so it never pokes through, so on the road itself
+   * use the road's own surface, easing onto the ground beyond the edge.
+   */
+  endlessSurfaceY() {
+    const t = this.track;
+    const q = this.q;
+    const ground = t.groundAt(this.position.x, this.position.z, q);
+    const onRoad = 1 - smoothstep(t.halfWidth, t.halfWidth + 1.5, Math.abs(q.offset));
+    return lerp(ground, Math.max(ground, q.y), onRoad);
   }
 
   // --- Driver aids -----------------------------------------------------
@@ -564,7 +577,7 @@ export class VehiclePhysics {
     }
     if (t.endless) {
       t.update(q.index); // top up the road ahead
-      this.position.y = t.groundAt(this.position.x, this.position.z, q);
+      this.position.y = this.endlessSurfaceY();
       // Strayed too far or into water: ask the game to put the car back
       this.offRoadTime = Math.abs(q.offset) > t.recoverOffset ? this.offRoadTime + dt : 0;
       if (this.offRoadTime > 1.5 || Math.abs(q.offset) > t.recoverOffset * 2 || t.inWater(this.position.x, this.position.z, q, this.position.y)) {
