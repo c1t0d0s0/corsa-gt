@@ -5,11 +5,12 @@ import { getCarSpec } from '../engine/CarSpecs.js';
  * Allows choosing the car and modifying paint colors, finishes, wing aero, rim colors, and engine tuning specs.
  */
 export class GarageUI {
-  constructor(onUpdateCar, onEngineTuneChange) {
+  constructor(onUpdateCar, onEngineTuneChange, onSoundChange) {
     this.panel = document.getElementById('garage-panel');
     this.visible = false;
     this.onUpdateCar = onUpdateCar;
     this.onEngineTuneChange = onEngineTuneChange;
+    this.onSoundChange = onSoundChange;
 
     this.currentConfig = {
       carId: 'gt',
@@ -92,6 +93,17 @@ export class GarageUI {
         this.applyTune();
       });
     });
+
+    // Drive sound: engine or electric
+    document.querySelectorAll('.sound-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.setSound(btn.dataset.sound));
+    });
+  }
+
+  /** 'engine' or 'ev'; reflected in the buttons and passed to the audio. */
+  setSound(sound) {
+    document.querySelectorAll('.sound-btn').forEach(b => b.classList.toggle('active', b.dataset.sound === sound));
+    if (this.onSoundChange) this.onSoundChange(sound);
   }
 
   /** Switch car, keeping paint and wheels; the wing and tune presets follow the car. */

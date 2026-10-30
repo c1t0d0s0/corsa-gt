@@ -778,7 +778,7 @@ body.pre-start #telemetry-panel {
   gap: 8px;
 }
 
-.car-btn, .finish-btn, .wing-btn, .tune-btn, .tod-btn, .weather-btn {
+.car-btn, .finish-btn, .wing-btn, .tune-btn, .sound-btn, .tod-btn, .weather-btn {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 6px;
@@ -789,7 +789,7 @@ body.pre-start #telemetry-panel {
   cursor: pointer;
 }
 
-.car-btn.active, .finish-btn.active, .wing-btn.active, .tune-btn.active, .tod-btn.active, .weather-btn.active {
+.car-btn.active, .finish-btn.active, .wing-btn.active, .tune-btn.active, .sound-btn.active, .tod-btn.active, .weather-btn.active {
   background: var(--color-accent);
   color: #0f172a;
   border-color: var(--color-accent);

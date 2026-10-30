@@ -53,6 +53,10 @@ try {
   }
   await click('.tune-btn[data-level="2"]');
   check('paint, rims and tune applied', await run('corsa.carModel.bodyColor === 0x2563eb && corsa.carModel.rimColor === 0xb08d3c && corsa.physics.engineHp === 850'));
+  await click('.sound-btn[data-sound="ev"]');
+  check('EV drive sound selected', await run("corsa.audio.ev && document.querySelector('.sound-btn[data-sound=\"ev\"]').classList.contains('active')"));
+  await click('.sound-btn[data-sound="engine"]');
+  check('engine sound back', !(await run('corsa.audio.ev')));
   await shot('garage');
   // Change car and back: paint and wheels carry over; wing and tune presets follow the car
   await click('.car-btn[data-car="piccola"]');

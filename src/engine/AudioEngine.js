@@ -7,6 +7,10 @@
  * an "exhaust" of fixed resonances so the tone changes as the revs sweep
  * past them. Combustion rasp, intake roar, turbo whistle, overrun crackle,
  * wind, road and tyre noise are layered on top.
+ *
+ * In EV mode the engine falls silent and an electric drive takes over: the
+ * motor's whine and the reduction gear's hum, both locked to road speed, plus
+ * the soft warning tone EVs play at walking pace. Wind, road and tyres stay.
  */
 const HARMONICS = 40;
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
@@ -61,6 +65,8 @@ export class AudioEngine {
     this.lastWallHit = 0;
     this.interior = false;
     this.offline = false;
+    this.ev = false; // electric drive sound instead of the engine
+    this.regen = 0;
   }
 
   /** Build the graph. A context can be passed in for offline rendering in tests. */
@@ -175,6 +181,42 @@ export class AudioEngine {
       this.turboNoiseGain = gain(0);
       chain(noise(), this.turboNoiseFilter, this.turboNoiseGain, out);
 
+      // --- Electric drive: motor whine, reduction-gear hum, low-speed warning tone ---
+      const evBus = gain(1);
+      chain(evBus, filter('highpass', 90, 0.7), out);
+      this.motorOsc = ctx.createOscillator();
+      this.motorOsc.type = 'sine';
+      this.motorOsc.frequency.setValueAtTime(100, now);
+      this.motorOsc.start();
+      this.motorGain = gain(0);
+      chain(this.motorOsc, this.motorGain, evBus);
+      // The inverter adds a thinner overtone that comes up under hard acceleration
+      this.motorOsc2 = ctx.createOscillator();
+      this.motorOsc2.type = 'triangle';
+      this.motorOsc2.frequency.setValueAtTime(300, now);
+      this.motorOsc2.start();
+      this.motorGain2 = gain(0);
+      chain(this.motorOsc2, filter('lowpass', 5000, 0.5), this.motorGain2, evBus);
+      this.gearOsc = ctx.createOscillator();
+      this.gearOsc.type = 'sine';
+      this.gearOsc.frequency.setValueAtTime(40, now);
+      this.gearOsc.start();
+      this.gearGain = gain(0);
+      chain(this.gearOsc, this.gearGain, evBus);
+      // Warning tone: two slightly detuned soft voices, gone by 30 km/h
+      this.avasGain = gain(0);
+      const avasTone = filter('lowpass', 1100, 0.7);
+      chain(avasTone, this.avasGain, evBus);
+      this.avasOscs = [0, 9].map((cents) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.detune.setValueAtTime(cents, now);
+        osc.frequency.setValueAtTime(330, now);
+        osc.connect(avasTone);
+        osc.start();
+        return osc;
+      });
+
       // --- Wind and road ---
       this.windFilter = filter('bandpass', 700, 0.5);
       this.windGain = gain(0);
@@ -228,8 +270,57 @@ export class AudioEngine {
 
     // Load lags the pedal slightly on the way up, drops quickly on lift
     this.load += (throttle - this.load) * Math.min(1, (throttle > this.load ? 14 : 22) * dt);
-    const load = this.load;
 
+    if (this.ev) {
+      this.updateElectric(s, throttle, set, dt);
+    } else {
+      this.updateEngine(s, rpm, maxRpm, norm, throttle, now, set, dt);
+    }
+    this.updateSurroundings(s, set);
+  }
+
+  /** Mute one sound set and fade up the other when switching power train. */
+  setElectric(on) {
+    this.ev = on;
+    if (!this.initialized) return;
+    const now = this.ctx.currentTime;
+    const off = (param) => param.setTargetAtTime(0, now, 0.08);
+    if (on) {
+      [this.engineGain.gain, this.intakeGain.gain, this.turboGain.gain, this.turboNoiseGain.gain].forEach(off);
+      this.crackleTime = 0;
+      this.boost = 0;
+    } else {
+      [this.motorGain.gain, this.motorGain2.gain, this.gearGain.gain, this.avasGain.gain].forEach(off);
+    }
+  }
+
+  /**
+   * Electric drive. The motor turns at a fixed ratio to the wheels, so its
+   * whine rises with road speed, not revs: louder when it pulls or recovers
+   * energy, faint when coasting. Everything is kept well below the engine.
+   */
+  updateElectric(s, throttle, set, dt) {
+    const kmh = Math.abs(s.speedKmh);
+    const moving = clamp(kmh / 25, 0, 1);
+    // Lifting off or braking above walking pace: the motor regenerates and keeps singing, more softly
+    const regenTarget = s.running === false ? 0 : clamp((1 - throttle * 3) * clamp((kmh - 8) / 30, 0, 1), 0, 1) * (0.5 + clamp(s.brake || 0, 0, 1) * 0.5);
+    this.regen += (regenTarget - this.regen) * Math.min(1, 6 * dt);
+    const motorHz = 70 + kmh * 15;
+    set(this.motorOsc.frequency, motorHz, 0.05);
+    set(this.motorOsc2.frequency, motorHz * 2.98, 0.05);
+    set(this.gearOsc.frequency, 30 + kmh * 2.6, 0.05);
+    const effort = Math.sqrt(this.load);
+    set(this.motorGain.gain, moving * (0.008 + effort * 0.03 + this.regen * 0.014), 0.06);
+    set(this.motorGain2.gain, moving * effort * 0.006, 0.06);
+    set(this.gearGain.gain, moving * (0.03 + effort * 0.03), 0.08);
+    // Warning tone at walking pace (and a faint hum at a standstill), rising a little with speed
+    const avas = s.running === false ? 0 : (1 - clamp(kmh / 30, 0, 1)) * (kmh < 1 ? 0.25 : 1);
+    this.avasOscs.forEach((osc) => set(osc.frequency, 300 + kmh * 9, 0.08));
+    set(this.avasGain.gain, avas * 0.035, 0.15);
+  }
+
+  updateEngine(s, rpm, maxRpm, norm, throttle, now, set, dt) {
+    const load = this.load;
     // Engine core
     const cycleHz = rpm / 120;
     this.engineOscs.forEach((osc) => set(osc.frequency, cycleHz, 0.03));
@@ -283,6 +374,10 @@ export class AudioEngine {
       }
     }
 
+  }
+
+  /** Wind, road, tyres and barrier knocks, whatever drives the car. */
+  updateSurroundings(s, set) {
     // Wind and road
     const speed = clamp(s.speedKmh / 250, 0, 1.2);
     const offRoad = s.surface === 'grass' || s.surface === 'sand';
@@ -349,7 +444,7 @@ export class AudioEngine {
 
   /** Gear change: a flat bang out of the exhaust on upshifts, a throttle blip coming down. */
   playShift(direction, intensity = 1) {
-    if (!this.ready()) return;
+    if (!this.ready() || this.ev) return;
     if (direction > 0) {
       this.burst({ freq: 190, q: 1.0, level: 0.3 * intensity, decay: 0.1, thump: 0.3 * intensity });
     } else {

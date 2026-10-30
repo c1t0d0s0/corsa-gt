@@ -48,7 +48,8 @@ class CorsaApp {
       (hp) => {
         this.physics.setEngineTune(hp);
         return this.physics.estimateTopSpeedKmh();
-      }
+      },
+      (sound) => this.audio.setElectric(sound === 'ev')
     );
 
     this.trackSelectUI = new TrackSelectUI(
@@ -69,6 +70,7 @@ class CorsaApp {
     this.garageUI.currentConfig.carId = getCarSpec(params.get('car')).id;
     this.garageUI.selectCar(this.garageUI.currentConfig.carId);
     this.garageUI.applyAll();
+    if (params.get('sound') === 'ev') this.garageUI.setSound('ev');
     this.loadTrack(params.get('track') || 'apex', params.get('tod'), { seed: params.get('seed') || randomSeed() });
     if (params.get('autopilot') === '1') this.setAutopilot(true);
     this.startCamera = params.get('cam') || 'chase';
@@ -335,6 +337,7 @@ class CorsaApp {
       rpm: this.physics.rpm,
       maxRpm: this.physics.maxRpm,
       throttle: this.physics.throttle,
+      brake: this.physics.brake,
       cut: this.physics.shiftTimer > 0.13,
       slip: this.physics.slipAmount,
       speedKmh: this.physics.speedKmh,

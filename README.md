@@ -26,7 +26,7 @@ On a phone in landscape:
 - **Two assist levels** — *Easy* brakes for corners and steers back to the road when you let go of the wheel; *Normal* leaves you with ABS and light traction control.
 - **Four cameras** — chase, hood, cockpit and a free orbit view.
 - **Two cars** — the Corsa GT, a rear-drive coupé that tops 300 km/h, and the Corsa Piccola, a light front-drive city car with round headlamps, a white roof and a high-revving four-cylinder.
-- **Garage** — choice of car, body colour, paint finish, wheel colour, rear wing and engine tune.
+- **Garage** — choice of car, body colour, paint finish, wheel colour, rear wing and engine tune, and the drive sound: the engine, or a quiet electric (EV) whine for relaxed cruising on the endless road.
 - **Plays on phones** — on-screen controls and a compact HUD in landscape.
 - **English and Japanese UI** — chosen from the browser language.
 - **Keyboard, gamepad and touch** input.
@@ -122,6 +122,7 @@ Useful for demos, screenshots and testing. Combine them freely, e.g. `/?track=ci
 | `autostart` | `1` | Skip the start screen (no sound) |
 | `autopilot` | `1` | The car drives itself |
 | `seed` | any text | Seed for the endless road (`track=endless`) |
+| `sound` | `ev` | Start with the quiet electric drive sound |
 | `t` | seconds | Fast-forward the simulation before the first frame |
 
 ## Checks
